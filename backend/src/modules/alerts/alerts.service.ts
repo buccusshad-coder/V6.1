@@ -48,7 +48,7 @@ export class AlertsService {
     return this.alertRepository.save(alert);
   }
 
-  async getAlertsByType(userId: string, type: string) {
+  async getAlertsByType(userId: string, type: 'price' | 'portfolio' | 'position' | 'transaction') {
     return this.alertRepository.find({
       where: { userId, type, isActive: true },
       order: { createdAt: 'DESC' },

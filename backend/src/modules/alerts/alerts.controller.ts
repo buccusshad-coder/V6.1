@@ -40,7 +40,10 @@ export class AlertsController {
 
   @Get('by-type/:type')
   getByType(@Request() req, @Param('type') type: string) {
-    return this.alertsService.getAlertsByType(req.user.userId, type);
+    return this.alertsService.getAlertsByType(
+      req.user.userId,
+      type as 'price' | 'portfolio' | 'position' | 'transaction',
+    );
   }
 
   @Get('by-symbol/:symbol')
