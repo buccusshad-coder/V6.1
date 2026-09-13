@@ -1,22 +1,8 @@
-modules = ["nodejs-20:v8-20.4.0"]
-
-[workflows]
-runButton = "run"
-
-[[workflows.workflow]]
-name = "run"
-description = "Build and run backend"
-tasks = ["build", "start"]
-
-[[workflows.tasks]]
-name = "build"
-description = "Build backend"
-command = "cd backend && npm install && npm run build"
-
-[[workflows.tasks]]
-name = "start"
-description = "Start backend"
-command = "cd backend && npm run start:prod"
+entrypoint = "backend/package.json"
+run = "cd backend && npm install && npm run start:prod"
 
 [env]
 NODE_ENV = "production"
+
+[nix]
+channel = "stable-23.11"
