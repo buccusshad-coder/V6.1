@@ -254,10 +254,18 @@ export class EtherscanService {
         },
       });
 
-      if (response.data.result === '0' || !Array.isArray(response.data.result)) {
+      // Check for error responses
+      if (response.data.status === '0' || response.data.message === 'NOTOK') {
+        console.warn(`Etherscan error for ${walletAddress}: ${response.data.message} - ${response.data.result}`);
         return [];
       }
 
+      if (response.data.result === '0' || !Array.isArray(response.data.result)) {
+        console.log(`No token transfers found for ${walletAddress}`);
+        return [];
+      }
+
+      console.log(`Found ${response.data.result.length} token transfers for ${walletAddress}`);
       return response.data.result;
     } catch (error) {
       console.error('Error fetching token transfers:', error);
