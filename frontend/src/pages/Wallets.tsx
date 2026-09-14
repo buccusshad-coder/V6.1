@@ -91,6 +91,17 @@ export default function Wallets() {
     setError('');
   };
 
+  const handleScanWallet = async (walletId: string) => {
+    try {
+      setError('');
+      await api.scanWallet(walletId);
+      setSuccess('Wallet scanned successfully!');
+      await fetchWallets();
+    } catch (err: any) {
+      setError(err.response?.data?.message || 'Failed to scan wallet');
+    }
+  };
+
   const CHAINS = ['ethereum', 'arbitrum', 'base', 'solana', 'polygon', 'optimism'];
   const CHAIN_COLORS: Record<string, string> = {
     ethereum: '#627eea',
@@ -214,6 +225,13 @@ export default function Wallets() {
 
               <div className="wallet-footer">
                 <small>Added {new Date(wallet.createdAt).toLocaleDateString()}</small>
+                <button
+                  className="btn-scan"
+                  onClick={() => handleScanWallet(wallet.id)}
+                  title="Scan wallet for tokens"
+                >
+                  🔍 Scan
+                </button>
               </div>
             </div>
           ))}

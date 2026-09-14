@@ -230,9 +230,27 @@
 }
 
 .wallet-footer {
-  text-align: right;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
   color: #999;
   font-size: 12px;
+}
+
+.btn-scan {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  border: none;
+  padding: 8px 16px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: 500;
+  font-size: 12px;
+  transition: transform 0.2s;
+}
+
+.btn-scan:hover {
+  transform: translateY(-2px);
 }
 
 @media (max-width: 768px) {
