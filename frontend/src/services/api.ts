@@ -1,6 +1,6 @@
 import axios, { AxiosInstance, AxiosError } from 'axios';
 
-const API_URL = 'http://192.168.1.74:3000/api';
+const API_URL = 'https://hypocoristically-thriftless-danille.ngrok-free.dev/api';
 
 class ApiService {
   private api: AxiosInstance;
@@ -8,6 +8,7 @@ class ApiService {
   constructor() {
     this.api = axios.create({
       baseURL: API_URL,
+      timeout: 15000,
       headers: {
         'Content-Type': 'application/json',
       },
