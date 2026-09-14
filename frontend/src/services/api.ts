@@ -124,6 +124,10 @@ class ApiService {
     return this.api.get('/portfolio/history');
   }
 
+  getPortfolioByWallet() {
+    return this.api.get('/portfolio/by-wallet');
+  }
+
   // Prices
   getPrices() {
     return this.api.get('/prices');

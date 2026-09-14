@@ -46,7 +46,7 @@ export default function Portfolio() {
       setLoading(true);
       const [overviewData, walletsData] = await Promise.all([
         api.getPortfolioOverview(),
-        api.get('/portfolio/by-wallet'),
+        api.getPortfolioByWallet(),
       ]);
 
       setOverview(overviewData.data);
