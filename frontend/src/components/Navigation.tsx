@@ -51,6 +51,11 @@ export default function Navigation() {
               Alerts
             </Link>
           </li>
+          <li>
+            <Link to="/token-tracer" className="nav-link">
+              Token Tracer
+            </Link>
+          </li>
         </ul>
 
         <button className="nav-logout" onClick={handleLogout}>

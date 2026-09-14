@@ -10,6 +10,7 @@ const Positions = React.lazy(() => import('./pages/Positions'));
 const Transactions = React.lazy(() => import('./pages/Transactions'));
 const Portfolio = React.lazy(() => import('./pages/Portfolio'));
 const Alerts = React.lazy(() => import('./pages/Alerts'));
+const TokenTracer = React.lazy(() => import('./pages/TokenTracer'));
 const Settings = React.lazy(() => import('./pages/Settings'));
 
 const PrivateRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -69,6 +70,14 @@ export default function App() {
             element={
               <PrivateRoute>
                 <Alerts />
+              </PrivateRoute>
+            }
+          />
+          <Route
+            path="/token-tracer"
+            element={
+              <PrivateRoute>
+                <TokenTracer />
               </PrivateRoute>
             }
           />
