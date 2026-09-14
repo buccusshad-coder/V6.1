@@ -1,4 +1,7 @@
 import { Injectable } from '@nestjs/common';
+import { WalletScannerService } from '../wallets/wallet-scanner.service';
+import { EtherscanService } from '../../integrations/etherscan.service';
+import { PricesService } from '../prices/prices.service';
 
 export interface TokenTrace {
   tokenSymbol: string;
@@ -33,72 +36,143 @@ export interface TokenTrace {
 
 @Injectable()
 export class TokenTracerService {
+  constructor(
+    private readonly walletScannerService: WalletScannerService,
+    private readonly etherscanService: EtherscanService,
+    private readonly pricesService: PricesService,
+  ) {}
+
   /**
    * Create a complete trace of a token from mint to current location
    * Shows all transfers, swaps, bridges, and other interactions
+   * Fetches real data from Etherscan API
    */
   async traceToken(
     walletAddress: string,
     tokenAddress: string,
     chain: string,
   ): Promise<TokenTrace> {
-    // This would integrate with blockchain APIs to build the complete journey
+    try {
+      // Fetch token metadata
+      const metadata = await this.etherscanService.getTokenMetadata(tokenAddress, chain);
 
-    return {
-      tokenSymbol: 'SAMPLE',
-      tokenAddress,
-      quantity: 100,
-      currentValue: 5000,
-      journey: [
-        {
-          step: 1,
-          action: 'mint',
-          from: '0x0000000000000000000000000000000000000000',
-          to: '0xoriginminter...',
-          amount: 10000,
-          timestamp: new Date('2024-01-01'),
-          txHash: '0x123abc...',
-          priceAtTime: 1.0,
-          valueAtTime: 10000,
-          details: {},
-        },
-        {
-          step: 2,
-          action: 'transfer',
-          from: '0xoriginminter...',
-          to: '0xcex...',
-          amount: 5000,
-          timestamp: new Date('2024-02-01'),
-          txHash: '0x456def...',
-          priceAtTime: 1.2,
-          valueAtTime: 6000,
-          details: {},
-        },
-        {
-          step: 3,
-          action: 'swap',
-          from: '0xcex...',
-          to: walletAddress,
-          amount: 100,
-          timestamp: new Date('2024-03-01'),
-          txHash: '0x789ghi...',
-          priceAtTime: 50,
-          valueAtTime: 5000,
-          details: {
-            dex: 'Uniswap',
-            gasPrice: '45 gwei',
-            gasUsed: '150000',
+      // Fetch token transfer history for this wallet
+      const transfers = await this.etherscanService.getTokenTransfers(walletAddress, chain);
+
+      // Filter transfers for this specific token
+      const tokenTransfers = transfers.filter(
+        tx => tx.contractAddress.toLowerCase() === tokenAddress.toLowerCase(),
+      );
+
+      if (tokenTransfers.length === 0) {
+        // No transfers found - return empty trace
+        return {
+          tokenSymbol: metadata.symbol || 'UNKNOWN',
+          tokenAddress,
+          quantity: 0,
+          currentValue: 0,
+          journey: [],
+          lastAction: {
+            action: 'none',
+            location: walletAddress,
+            timestamp: new Date(),
           },
+          totalGainLoss: 0,
+          roi: 0,
+        };
+      }
+
+      // Sort transfers by timestamp
+      tokenTransfers.sort((a, b) => parseInt(a.timeStamp) - parseInt(b.timeStamp));
+
+      // Build journey
+      const journey = [];
+      let totalAmount = 0;
+      let step = 1;
+
+      for (const tx of tokenTransfers.slice(0, 20)) { // Limit to last 20 transactions
+        const amount = this.etherscanService.parseDecimal(
+          tx.value,
+          parseInt(tx.tokenDecimal),
+        );
+
+        const isIncoming = tx.to.toLowerCase() === walletAddress.toLowerCase();
+        if (isIncoming) {
+          totalAmount += amount;
+        } else {
+          totalAmount -= amount;
+        }
+
+        // Try to get price at time (fallback to current price)
+        let priceAtTime = 0;
+        try {
+          const priceData = await this.pricesService.getLatestPrice(metadata.symbol);
+          priceAtTime = parseFloat(priceData.current_price) || 0;
+        } catch (e) {
+          priceAtTime = 0;
+        }
+
+        journey.push({
+          step: step++,
+          action: isIncoming ? 'transfer' : 'transfer',
+          from: tx.from,
+          to: tx.to,
+          amount,
+          timestamp: new Date(parseInt(tx.timeStamp) * 1000),
+          txHash: tx.hash,
+          priceAtTime,
+          valueAtTime: amount * priceAtTime,
+          details: {
+            gasPrice: `${parseInt(tx.gasPrice) / 1e9} gwei`,
+            gasUsed: tx.gasUsed,
+          },
+        });
+      }
+
+      // Get current price
+      let currentPrice = 0;
+      try {
+        const priceData = await this.pricesService.getLatestPrice(metadata.symbol);
+        currentPrice = parseFloat(priceData.current_price) || 0;
+      } catch (e) {
+        currentPrice = 0;
+      }
+
+      const currentValue = totalAmount * currentPrice;
+      const lastTransfer = tokenTransfers[tokenTransfers.length - 1];
+
+      return {
+        tokenSymbol: metadata.symbol,
+        tokenAddress,
+        quantity: totalAmount,
+        currentValue,
+        journey,
+        lastAction: {
+          action: 'transfer',
+          location: lastTransfer.to,
+          timestamp: new Date(parseInt(lastTransfer.timeStamp) * 1000),
         },
-      ],
-      lastAction: {
-        action: 'swap',
-        location: walletAddress,
-        timestamp: new Date('2024-03-01'),
-      },
-      totalGainLoss: 0,
-      roi: 0,
-    };
+        totalGainLoss: 0,
+        roi: 0,
+      };
+    } catch (error) {
+      console.error('Error tracing token:', error);
+      // Return empty trace on error
+      return {
+        tokenSymbol: 'ERROR',
+        tokenAddress,
+        quantity: 0,
+        currentValue: 0,
+        journey: [],
+        lastAction: {
+          action: 'error',
+          location: walletAddress,
+          timestamp: new Date(),
+        },
+        totalGainLoss: 0,
+        roi: 0,
+      };
+    }
   }
 
   /**

@@ -7,9 +7,17 @@ import { TokenTracerController } from './token-tracer.controller';
 import { Transaction } from '../transactions/entities/transaction.entity';
 import { Position } from '../positions/entities/position.entity';
 import { Wallet } from '../wallets/entities/wallet.entity';
+import { WalletsModule } from '../wallets/wallets.module';
+import { PricesModule } from '../prices/prices.module';
+import { IntegrationsModule } from '../../integrations/integrations.module';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([Transaction, Position, Wallet])],
+  imports: [
+    TypeOrmModule.forFeature([Transaction, Position, Wallet]),
+    WalletsModule,
+    PricesModule,
+    IntegrationsModule,
+  ],
   controllers: [AnalyticsController, TokenTracerController],
   providers: [AnalyticsService, TokenTracerService],
 })
