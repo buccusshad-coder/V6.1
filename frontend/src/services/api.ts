@@ -74,6 +74,18 @@ class ApiService {
     return this.api.delete(`/wallets/${id}`);
   }
 
+  scanWallet(id: string) {
+    return this.api.post(`/wallets/${id}/scan`, {});
+  }
+
+  restoreWallet(id: string) {
+    return this.api.post(`/wallets/${id}/restore`, {});
+  }
+
+  getDeletedWallets() {
+    return this.api.get('/wallets/deleted/all');
+  }
+
   // Positions
   getPositions() {
     return this.api.get('/positions');
@@ -201,6 +213,19 @@ class ApiService {
 
   getRecentTransactions(limit: number = 10) {
     return this.api.get('/transactions/recent', { params: { limit } });
+  }
+
+  // Token Tracing
+  traceToken(tokenAddress: string, chain: string) {
+    return this.api.get(`/tokens/trace/${tokenAddress}/${chain}`);
+  }
+
+  getTokenTraceAsTable(tokenAddress: string, chain: string) {
+    return this.api.get(`/tokens/trace/${tokenAddress}/${chain}/table`);
+  }
+
+  getTraceSummary(tokenAddress: string, chain: string) {
+    return this.api.get(`/tokens/trace/${tokenAddress}/${chain}/summary`);
   }
 
   // Analytics

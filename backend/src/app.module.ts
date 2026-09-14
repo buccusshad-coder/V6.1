@@ -15,6 +15,7 @@ import { NotificationsModule } from './modules/notifications/notifications.modul
 import { PortfolioModule } from './modules/portfolio/portfolio.module';
 import { TransactionsModule } from './modules/transactions/transactions.module';
 import { AnalyticsModule } from './modules/analytics/analytics.module';
+import { IntegrationsModule } from './integrations/integrations.module';
 
 import { TypeOrmConfigService } from './config/typeorm.config';
 
@@ -42,6 +43,7 @@ import { TypeOrmConfigService } from './config/typeorm.config';
       secret: 'tracker_v7_dev_secret_key_1234567890_change_in_prod',
       signOptions: { expiresIn: '7d' },
     }),
+    IntegrationsModule,
     AuthModule,
     UsersModule,
     WalletsModule,

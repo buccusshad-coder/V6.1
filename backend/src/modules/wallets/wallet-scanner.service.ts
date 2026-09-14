@@ -1,7 +1,8 @@
-import { Injectable } from '@nestjs/common';
-import axios from 'axios';
+import { Injectable, Inject } from '@nestjs/common';
+import { EtherscanService } from '../../integrations/etherscan.service';
+import { PricesService } from '../prices/prices.service';
 
-interface TokenBalance {
+export interface TokenBalance {
   symbol: string;
   name: string;
   address: string;
@@ -26,75 +27,137 @@ interface TokenTransaction {
 
 @Injectable()
 export class WalletScannerService {
-  // Placeholder for blockchain APIs
-  // In production, integrate with Etherscan, Moralis, Alchemy, etc.
+  constructor(
+    private readonly etherscanService: EtherscanService,
+    private readonly pricesService: PricesService,
+  ) {}
 
+  /**
+   * Scan wallet for all token balances including native coin
+   */
   async scanWalletBalance(
     address: string,
     chain: string,
   ): Promise<TokenBalance[]> {
     try {
-      // This would call blockchain APIs like:
-      // - Etherscan API for Ethereum
-      // - Polygonscan for Polygon
-      // - Solscan for Solana
-      // etc.
+      const balances: TokenBalance[] = [];
 
-      // Placeholder response
-      return [
-        {
-          symbol: 'ETH',
-          name: 'Ethereum',
+      // Get native coin (ETH/MATIC) balance
+      const ethBalance = await this.etherscanService.getEthBalance(address, chain);
+      const ethDecimals = chain.toLowerCase() === 'polygon' ? 18 : 18;
+      const parsedEthBalance = this.etherscanService.parseDecimal(ethBalance.balance, ethDecimals);
+
+      // Get current native coin price
+      const symbolMap = { ethereum: 'ETH', polygon: 'MATIC' };
+      const symbol = symbolMap[chain.toLowerCase()] || 'ETH';
+      let nativePrice = 0;
+      try {
+        const priceData = await this.pricesService.getLatestPrice(symbol);
+        nativePrice = parseFloat(priceData.current_price) || 0;
+      } catch (e) {
+        console.warn(`Could not fetch price for ${symbol}`);
+      }
+
+      if (parsedEthBalance > 0) {
+        balances.push({
+          symbol: ethBalance.symbol,
+          name: ethBalance.symbol === 'ETH' ? 'Ethereum' : 'Matic',
           address: '0x0000000000000000000000000000000000000000',
-          amount: '2.5',
-          decimals: 18,
-          value: 5000,
-        },
-        {
-          symbol: 'USDC',
-          name: 'USD Coin',
-          address: '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48',
-          amount: '10000',
-          decimals: 6,
-          value: 10000,
-        },
-      ];
+          amount: parsedEthBalance.toString(),
+          decimals: ethDecimals,
+          value: parsedEthBalance * nativePrice,
+        });
+      }
+
+      // Get all token transfers to calculate balances
+      const tokenTransfers = await this.etherscanService.getTokenTransfers(address, chain);
+
+      // Group by token and calculate net balance
+      const tokenMap = new Map<string, TokenBalance>();
+
+      for (const tx of tokenTransfers) {
+        const key = tx.contractAddress.toLowerCase();
+        const isIncoming = tx.to.toLowerCase() === address.toLowerCase();
+        const amount = this.etherscanService.parseDecimal(tx.value, parseInt(tx.tokenDecimal));
+
+        if (!tokenMap.has(key)) {
+          tokenMap.set(key, {
+            symbol: tx.tokenSymbol,
+            name: tx.tokenName,
+            address: tx.contractAddress,
+            amount: '0',
+            decimals: parseInt(tx.tokenDecimal),
+            value: 0,
+          });
+        }
+
+        const token = tokenMap.get(key)!;
+        const currentAmount = parseFloat(token.amount);
+        token.amount = (
+          isIncoming
+            ? currentAmount + amount
+            : currentAmount - amount
+        ).toString();
+      }
+
+      // Get prices and calculate values
+      for (const [, token] of tokenMap) {
+        if (parseFloat(token.amount) > 0) {
+          try {
+            const priceData = await this.pricesService.getLatestPrice(token.symbol);
+            token.value = parseFloat(token.amount) * parseFloat(priceData.current_price);
+          } catch (e) {
+            console.warn(`Could not fetch price for ${token.symbol}`);
+            token.value = 0;
+          }
+          balances.push(token);
+        }
+      }
+
+      return balances;
     } catch (error) {
       console.error(`Failed to scan wallet ${address}:`, error);
       return [];
     }
   }
 
+  /**
+   * Get transaction history for a specific token
+   */
   async getTokenTransactionHistory(
     walletAddress: string,
     tokenAddress: string,
     chain: string,
   ): Promise<TokenTransaction[]> {
     try {
-      // Fetch transaction history from blockchain
-      // Track token movement from original address
+      const tokenTransfers = await this.etherscanService.getTokenTransfers(walletAddress, chain);
 
-      return [
-        {
-          hash: '0x123abc...',
-          from: '0xaabbcc...',
-          to: walletAddress,
-          type: 'transfer',
-          token: tokenAddress,
-          amount: '1.5',
-          timestamp: Date.now() - 86400000,
-          blockNumber: 18500000,
-          gasPrice: '45',
-          gasUsed: '21000',
-          value: 3000,
-        },
-      ];
+      const filtered = tokenTransfers
+        .filter(tx => tx.contractAddress.toLowerCase() === tokenAddress.toLowerCase())
+        .map(tx => ({
+          hash: tx.hash,
+          from: tx.from,
+          to: tx.to,
+          type: 'transfer' as const,
+          token: tx.contractAddress,
+          amount: this.etherscanService.parseDecimal(tx.value, parseInt(tx.tokenDecimal)).toString(),
+          timestamp: parseInt(tx.timeStamp) * 1000,
+          blockNumber: parseInt(tx.blockNumber),
+          gasPrice: tx.gasPrice,
+          gasUsed: tx.gasUsed,
+          value: 0, // Would need price history to calculate
+        }));
+
+      return filtered;
     } catch (error) {
       console.error(`Failed to fetch transaction history:`, error);
       return [];
     }
   }
 
+  /**
+   * Trace token origin by following transfers backwards
+   */
   async traceTokenOrigin(
     walletAddress: string,
     tokenAddress: string,
@@ -111,31 +174,39 @@ export class WalletScannerService {
     currentLocation: string;
   }> {
     try {
-      // Trace token back to its origin
-      // Follow the chain through transfers, swaps, bridges
+      const path: Array<{ address: string; type: string; timestamp: number; amount: string }> = [];
+      const tokenTransfers = await this.etherscanService.getTokenTransfers(walletAddress, chain);
+
+      const filtered = tokenTransfers
+        .filter(tx => tx.contractAddress.toLowerCase() === tokenAddress.toLowerCase())
+        .sort((a, b) => parseInt(a.timeStamp) - parseInt(b.timeStamp));
+
+      let origin = '';
+
+      for (const tx of filtered.slice(0, depth)) {
+        const amount = this.etherscanService.parseDecimal(tx.value, parseInt(tx.tokenDecimal));
+        path.push({
+          address: tx.from,
+          type: 'transfer',
+          timestamp: parseInt(tx.timeStamp) * 1000,
+          amount: amount.toString(),
+        });
+        origin = tx.from;
+      }
+
+      // Add current location
+      if (filtered.length > 0) {
+        path.push({
+          address: walletAddress,
+          type: 'hold',
+          timestamp: Date.now(),
+          amount: '0',
+        });
+      }
 
       return {
-        path: [
-          {
-            address: '0xoriginal...',
-            type: 'mint',
-            timestamp: Date.now() - 30 * 86400000,
-            amount: '1000',
-          },
-          {
-            address: '0xswap...',
-            type: 'swap',
-            timestamp: Date.now() - 20 * 86400000,
-            amount: '1.5',
-          },
-          {
-            address: walletAddress,
-            type: 'transfer',
-            timestamp: Date.now() - 86400000,
-            amount: '1.5',
-          },
-        ],
-        origin: '0xoriginal...',
+        path,
+        origin: origin || walletAddress,
         currentLocation: walletAddress,
       };
     } catch (error) {
@@ -148,6 +219,10 @@ export class WalletScannerService {
     }
   }
 
+  /**
+   * Get swap history from transaction patterns
+   * Detects swaps by analyzing multi-token interactions
+   */
   async getSwapHistory(
     walletAddress: string,
     chain: string,
@@ -164,16 +239,57 @@ export class WalletScannerService {
     }>
   > {
     try {
-      // Get all swap transactions for wallet
-      // Track DEX interactions (Uniswap, SushiSwap, etc.)
+      const transfers = await this.etherscanService.getTokenTransfers(walletAddress, chain);
+      const swaps: Array<{
+        hash: string;
+        fromToken: string;
+        toToken: string;
+        fromAmount: string;
+        toAmount: string;
+        dex: string;
+        timestamp: number;
+        price: number;
+      }> = [];
 
-      return [];
+      // Group by transaction hash to find swaps
+      const byHash = new Map<string, any[]>();
+
+      for (const tx of transfers) {
+        if (!byHash.has(tx.hash)) {
+          byHash.set(tx.hash, []);
+        }
+        byHash.get(tx.hash)!.push(tx);
+      }
+
+      // Detect swaps: outgoing + incoming token in same tx = swap
+      for (const [hash, txs] of byHash) {
+        const outgoing = txs.find(t => t.from.toLowerCase() === walletAddress.toLowerCase());
+        const incoming = txs.find(t => t.to.toLowerCase() === walletAddress.toLowerCase() && t.hash === hash);
+
+        if (outgoing && incoming && outgoing.contractAddress !== incoming.contractAddress) {
+          swaps.push({
+            hash,
+            fromToken: outgoing.tokenSymbol,
+            toToken: incoming.tokenSymbol,
+            fromAmount: this.etherscanService.parseDecimal(outgoing.value, parseInt(outgoing.tokenDecimal)).toString(),
+            toAmount: this.etherscanService.parseDecimal(incoming.value, parseInt(incoming.tokenDecimal)).toString(),
+            dex: 'DEX',
+            timestamp: parseInt(outgoing.timeStamp) * 1000,
+            price: 0,
+          });
+        }
+      }
+
+      return swaps;
     } catch (error) {
       console.error(`Failed to get swap history:`, error);
       return [];
     }
   }
 
+  /**
+   * Get bridge history by detecting cross-chain transactions
+   */
   async getBridgeHistory(
     walletAddress: string,
   ): Promise<
@@ -188,9 +304,8 @@ export class WalletScannerService {
     }>
   > {
     try {
-      // Get all bridge transactions
-      // Track cross-chain movements
-
+      // Bridge detection would require checking multiple chains
+      // This is a placeholder that would need multi-chain support
       return [];
     } catch (error) {
       console.error(`Failed to get bridge history:`, error);

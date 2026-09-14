@@ -1,6 +1,7 @@
 import { Controller, Get, Post, Put, Delete, Body, Param, UseGuards, Request, BadRequestException } from '@nestjs/common';
 import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
 import { WalletsService } from './wallets.service';
+import { WalletScannerService, TokenBalance } from './wallet-scanner.service';
 import { CreateWalletDto } from './dto/create-wallet.dto';
 import { UpdateWalletDto } from './dto/update-wallet.dto';
 import { JwtGuard } from '../../guards/jwt.guard';
@@ -10,7 +11,10 @@ import { JwtGuard } from '../../guards/jwt.guard';
 @UseGuards(JwtGuard)
 @ApiBearerAuth()
 export class WalletsController {
-  constructor(private walletsService: WalletsService) {}
+  constructor(
+    private walletsService: WalletsService,
+    private walletScannerService: WalletScannerService,
+  ) {}
 
   @Post()
   async create(@Request() req, @Body() createWalletDto: CreateWalletDto) {
@@ -33,6 +37,15 @@ export class WalletsController {
   @Post(':id/restore')
   async restore(@Request() req, @Param('id') id: string) {
     return await this.walletsService.restoreWallet(id, req.user.userId);
+  }
+
+  @Post(':id/scan')
+  async scanWallet(@Request() req, @Param('id') id: string): Promise<TokenBalance[]> {
+    const wallet = await this.walletsService.findOne(id, req.user.userId);
+    if (!wallet) {
+      throw new BadRequestException('Wallet not found');
+    }
+    return await this.walletScannerService.scanWalletBalance(wallet.address, wallet.chain);
   }
 
   @Get('chain/:chain')
