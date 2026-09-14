@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react';
 import io, { Socket } from 'socket.io-client';
-import { useStore } from '../store/useStore';
+import { useStore } from '../store';
 
 export const usePriceStream = (symbols: string[]) => {
   const socketRef = useRef<Socket | null>(null);
