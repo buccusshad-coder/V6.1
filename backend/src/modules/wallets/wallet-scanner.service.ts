@@ -1,6 +1,5 @@
 import { Injectable, Inject } from '@nestjs/common';
 import { EtherscanService } from '../../integrations/etherscan.service';
-import { AlchemyService } from '../../integrations/alchemy.service';
 import { PricesService } from '../prices/prices.service';
 
 export interface TokenBalance {
@@ -30,7 +29,6 @@ interface TokenTransaction {
 export class WalletScannerService {
   constructor(
     private readonly etherscanService: EtherscanService,
-    private readonly alchemyService: AlchemyService,
     private readonly pricesService: PricesService,
   ) {}
 
@@ -71,23 +69,35 @@ export class WalletScannerService {
         });
       }
 
-      // Get all token balances from Alchemy (much faster and more reliable than Etherscan)
-      const alchemyTokens = await this.alchemyService.getTokenBalances(address);
+      // Get all token transfers to calculate balances
+      const tokenTransfers = await this.etherscanService.getTokenTransfers(address, chain);
 
-      // Convert Alchemy tokens to TokenBalance format
+      // Group by token and calculate net balance
       const tokenMap = new Map<string, TokenBalance>();
 
-      for (const token of alchemyTokens) {
-        const parsedAmount = this.alchemyService.parseDecimal(token.balance, token.decimals);
+      for (const tx of tokenTransfers) {
+        const key = tx.contractAddress.toLowerCase();
+        const isIncoming = tx.to.toLowerCase() === address.toLowerCase();
+        const amount = this.etherscanService.parseDecimal(tx.value, parseInt(tx.tokenDecimal));
 
-        tokenMap.set(token.contractAddress.toLowerCase(), {
-          symbol: token.symbol || 'UNKNOWN',
-          name: token.name || 'Unknown',
-          address: token.contractAddress,
-          amount: parsedAmount.toString(),
-          decimals: token.decimals,
-          value: 0,
-        });
+        if (!tokenMap.has(key)) {
+          tokenMap.set(key, {
+            symbol: tx.tokenSymbol,
+            name: tx.tokenName,
+            address: tx.contractAddress,
+            amount: '0',
+            decimals: parseInt(tx.tokenDecimal),
+            value: 0,
+          });
+        }
+
+        const token = tokenMap.get(key)!;
+        const currentAmount = parseFloat(token.amount);
+        token.amount = (
+          isIncoming
+            ? currentAmount + amount
+            : currentAmount - amount
+        ).toString();
       }
 
       // Get prices and calculate values
