@@ -173,17 +173,18 @@ export class WalletScannerService {
       });
     }
 
-    // Process tokens
+    // Process tokens - fetch prices by contract address (more reliable)
     for (const token of alchemyTokens) {
       const parsedBalance = this.alchemyService.parseDecimal(token.balance, token.decimals);
 
       if (parsedBalance > 0) {
         let tokenPrice = 0;
         try {
-          const priceData = await this.pricesService.getLatestPrice(token.symbol);
-          tokenPrice = parseFloat(priceData.current_price) || 0;
+          // Try by contract address first (works for all ERC-20s)
+          const priceData = await this.pricesService.getPriceByAddress(token.contractAddress, chain);
+          tokenPrice = parseFloat(priceData.current_price) || parseFloat(priceData.price) || 0;
         } catch (e) {
-          console.warn(`Could not fetch price for ${token.symbol}`);
+          console.warn(`Could not fetch price for ${token.symbol} (${token.contractAddress})`);
         }
 
         balances.push({
