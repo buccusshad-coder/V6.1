@@ -60,9 +60,9 @@ export class WalletsController {
       console.log(`💾 Saving wallet with balance ${totalValue} and ${holdings.length} holdings...`);
 
       // Only store top tokens in metadata to avoid exceeding field size limits
-      // Keep only tokens with value > $1 or top 100 by value
+      // Sort by value (descending) and take top 100
+      // Include all tokens regardless of value (prices might not be available yet)
       const significantHoldings = holdings
-        .filter(t => t.value >= 1)
         .sort((a, b) => (b.value || 0) - (a.value || 0))
         .slice(0, 100);
 
