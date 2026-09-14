@@ -33,27 +33,42 @@ export class AlchemyService {
         return [];
       }
 
-      const url = `${this.baseUrl}/${this.apiKey}/getOwnedTokens`;
+      const url = `${this.baseUrl}/${this.apiKey}`;
 
       const response = await axios.post(url, {
-        address: walletAddress,
-        withMetadata: true,
+        jsonrpc: '2.0',
+        method: 'alchemy_getTokenBalances',
+        params: [walletAddress, 'erc20'],
+        id: 1,
       }, {
         timeout: 10000,
       });
 
-      if (!response.data.ownedTokens || !Array.isArray(response.data.ownedTokens)) {
+      if (!response.data.result || !response.data.result.tokenBalances) {
         console.log(`No tokens found for ${walletAddress}`);
         return [];
       }
 
-      console.log(`Found ${response.data.ownedTokens.length} tokens for ${walletAddress}`);
+      const tokenBalances = response.data.result.tokenBalances;
+      console.log(`Found ${tokenBalances.length} tokens for ${walletAddress}`);
 
-      // Filter out tokens with zero balance
-      return response.data.ownedTokens.filter((token: AlchemyToken) => {
-        const balance = BigInt(token.balance || '0');
-        return balance > 0n;
-      });
+      // Convert Alchemy format to our format
+      const result: AlchemyToken[] = [];
+      for (const token of tokenBalances) {
+        const balance = BigInt(token.tokenBalance || '0');
+        if (balance > 0n) {
+          result.push({
+            contractAddress: token.contractAddress,
+            symbol: 'UNKNOWN',
+            name: 'Unknown Token',
+            decimals: 18,
+            logo: '',
+            balance: token.tokenBalance,
+          });
+        }
+      }
+
+      return result;
     } catch (error) {
       console.error('Error fetching tokens from Alchemy:', error);
       return [];
