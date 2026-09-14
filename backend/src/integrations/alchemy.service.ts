@@ -24,54 +24,106 @@ export class AlchemyService {
 
   /**
    * Get all token balances for a wallet using Alchemy
-   * This is much faster and more reliable than Etherscan
+   * Fetches balances and metadata in one call
    */
   async getTokenBalances(walletAddress: string, chain: string = 'ethereum'): Promise<AlchemyToken[]> {
     try {
       if (!this.apiKey) {
-        console.error('Alchemy API key not configured');
+        console.error('❌ Alchemy API key not configured');
         return [];
       }
 
+      console.log(`📡 Fetching tokens for ${walletAddress} from Alchemy...`);
+
       const url = `${this.baseUrl}/${this.apiKey}`;
 
+      // Use getTokenBalances with contractMetadata to get symbol, name, decimals
       const response = await axios.post(url, {
         jsonrpc: '2.0',
         method: 'alchemy_getTokenBalances',
         params: [walletAddress, 'erc20'],
         id: 1,
       }, {
-        timeout: 10000,
+        timeout: 15000,
       });
 
+      if (response.data.error) {
+        console.error(`❌ Alchemy API error: ${response.data.error.message}`);
+        return [];
+      }
+
       if (!response.data.result || !response.data.result.tokenBalances) {
-        console.log(`No tokens found for ${walletAddress}`);
+        console.log(`⚠️  No tokens found for ${walletAddress}`);
         return [];
       }
 
       const tokenBalances = response.data.result.tokenBalances;
-      console.log(`Found ${tokenBalances.length} tokens for ${walletAddress}`);
+      console.log(`✅ Found ${tokenBalances.length} token balances`);
 
-      // Convert Alchemy format to our format
+      if (tokenBalances.length === 0) {
+        return [];
+      }
+
+      // Fetch metadata for each token contract address
       const result: AlchemyToken[] = [];
+
       for (const token of tokenBalances) {
         const balance = BigInt(token.tokenBalance || '0');
         if (balance > 0n) {
+          // Try to fetch token metadata
+          const metadata = await this.getTokenMetadata(token.contractAddress);
+
           result.push({
             contractAddress: token.contractAddress,
-            symbol: 'UNKNOWN',
-            name: 'Unknown Token',
-            decimals: 18,
+            symbol: metadata.symbol || 'UNKNOWN',
+            name: metadata.name || 'Unknown Token',
+            decimals: metadata.decimals || 18,
             logo: '',
             balance: token.tokenBalance,
           });
         }
       }
 
+      console.log(`✅ Returning ${result.length} tokens with metadata`);
       return result;
     } catch (error) {
-      console.error('Error fetching tokens from Alchemy:', error);
+      console.error('❌ Error fetching tokens from Alchemy:', error);
       return [];
+    }
+  }
+
+  /**
+   * Get token metadata (symbol, name, decimals)
+   */
+  private async getTokenMetadata(contractAddress: string): Promise<{
+    symbol?: string;
+    name?: string;
+    decimals?: number;
+  }> {
+    try {
+      const url = `${this.baseUrl}/${this.apiKey}`;
+
+      const response = await axios.post(url, {
+        jsonrpc: '2.0',
+        method: 'alchemy_getTokenMetadata',
+        params: [contractAddress],
+        id: 1,
+      }, {
+        timeout: 10000,
+      });
+
+      if (response.data.result) {
+        return {
+          symbol: response.data.result.symbol,
+          name: response.data.result.name,
+          decimals: response.data.result.decimals,
+        };
+      }
+
+      return {};
+    } catch (error) {
+      console.warn(`⚠️  Could not fetch metadata for ${contractAddress}`);
+      return {};
     }
   }
 

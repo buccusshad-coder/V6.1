@@ -1,5 +1,6 @@
 import { Injectable, Inject } from '@nestjs/common';
 import { EtherscanService } from '../../integrations/etherscan.service';
+import { AlchemyService } from '../../integrations/alchemy.service';
 import { PricesService } from '../prices/prices.service';
 
 export interface TokenBalance {
@@ -29,22 +30,39 @@ interface TokenTransaction {
 export class WalletScannerService {
   constructor(
     private readonly etherscanService: EtherscanService,
+    private readonly alchemyService: AlchemyService,
     private readonly pricesService: PricesService,
   ) {}
 
   /**
    * Scan wallet for all token balances including native coin
+   * Uses Alchemy first (faster, more reliable), falls back to Etherscan
    */
   async scanWalletBalance(
     address: string,
     chain: string,
   ): Promise<TokenBalance[]> {
     try {
+      if (chain.toLowerCase() === 'ethereum') {
+        console.log(`🔍 Scanning wallet ${address} on ${chain}`);
+
+        // Try Alchemy first for Ethereum
+        const alchemyTokens = await this.alchemyService.getTokenBalances(address, chain);
+        if (alchemyTokens && alchemyTokens.length > 0) {
+          console.log(`✅ Alchemy returned ${alchemyTokens.length} tokens`);
+          return await this.formatTokenBalances(address, chain, alchemyTokens, 'alchemy');
+        }
+
+        console.warn(`⚠️  Alchemy returned no tokens, falling back to Etherscan`);
+      }
+
+      // Fallback to Etherscan
+      console.log(`📡 Using Etherscan for ${address}`);
       const balances: TokenBalance[] = [];
 
       // Get native coin (ETH/MATIC) balance
       const ethBalance = await this.etherscanService.getEthBalance(address, chain);
-      const ethDecimals = chain.toLowerCase() === 'polygon' ? 18 : 18;
+      const ethDecimals = 18;
       const parsedEthBalance = this.etherscanService.parseDecimal(ethBalance.balance, ethDecimals);
 
       // Get current native coin price
@@ -119,6 +137,68 @@ export class WalletScannerService {
       console.error(`Failed to scan wallet ${address}:`, error);
       return [];
     }
+  }
+
+  /**
+   * Format Alchemy tokens to TokenBalance format with pricing
+   */
+  private async formatTokenBalances(
+    address: string,
+    chain: string,
+    alchemyTokens: any[],
+    source: 'alchemy' | 'etherscan',
+  ): Promise<TokenBalance[]> {
+    const balances: TokenBalance[] = [];
+
+    // Get native coin balance
+    const ethBalance = await this.alchemyService.getEthBalance(address);
+    const parsedEthBalance = this.alchemyService.parseDecimal(ethBalance.balance, 18);
+
+    let nativePrice = 0;
+    try {
+      const priceData = await this.pricesService.getLatestPrice('ETH');
+      nativePrice = parseFloat(priceData.current_price) || 0;
+    } catch (e) {
+      console.warn(`Could not fetch ETH price`);
+    }
+
+    if (parsedEthBalance > 0) {
+      balances.push({
+        symbol: 'ETH',
+        name: 'Ethereum',
+        address: '0x0000000000000000000000000000000000000000',
+        amount: parsedEthBalance.toString(),
+        decimals: 18,
+        value: parsedEthBalance * nativePrice,
+      });
+    }
+
+    // Process tokens
+    for (const token of alchemyTokens) {
+      const parsedBalance = this.alchemyService.parseDecimal(token.balance, token.decimals);
+
+      if (parsedBalance > 0) {
+        let tokenPrice = 0;
+        try {
+          const priceData = await this.pricesService.getLatestPrice(token.symbol);
+          tokenPrice = parseFloat(priceData.current_price) || 0;
+        } catch (e) {
+          console.warn(`Could not fetch price for ${token.symbol}`);
+        }
+
+        balances.push({
+          symbol: token.symbol,
+          name: token.name,
+          address: token.contractAddress,
+          amount: parsedBalance.toString(),
+          decimals: token.decimals,
+          value: parsedBalance * tokenPrice,
+        });
+      }
+    }
+
+    console.log(`✅ Formatted ${balances.length} balances from ${source}`);
+    return balances;
   }
 
   /**
