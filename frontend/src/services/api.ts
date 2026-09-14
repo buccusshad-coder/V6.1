@@ -1,6 +1,6 @@
 import axios, { AxiosInstance, AxiosError } from 'axios';
 
-const API_URL = 'http://localhost:3000/api';
+const API_URL = 'http://192.168.1.74:3000/api';
 
 class ApiService {
   private api: AxiosInstance;
