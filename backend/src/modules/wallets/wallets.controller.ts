@@ -41,20 +41,61 @@ export class WalletsController {
 
   @Post(':id/scan')
   async scanWallet(@Request() req, @Param('id') id: string): Promise<any> {
-    const wallet = await this.walletsService.findOne(id, req.user.userId);
-    if (!wallet) {
-      throw new BadRequestException('Wallet not found');
+    try {
+      console.log(`🔍 Scanning wallet ${id} for user ${req.user.userId}`);
+
+      const wallet = await this.walletsService.findOne(id, req.user.userId);
+      if (!wallet) {
+        throw new BadRequestException('Wallet not found');
+      }
+
+      console.log(`📡 Fetching token balances for ${wallet.address} on ${wallet.chain}...`);
+      const holdings = await this.walletScannerService.scanWalletBalance(wallet.address, wallet.chain);
+
+      console.log(`✅ Found ${holdings.length} tokens`);
+
+      // Calculate total value and save holdings to metadata
+      const totalValue = holdings.reduce((sum, token) => sum + (token.value || 0), 0);
+
+      console.log(`💾 Saving wallet with balance ${totalValue} and ${holdings.length} holdings...`);
+
+      // Only store top tokens in metadata to avoid exceeding field size limits
+      // Keep only tokens with value > $1 or top 100 by value
+      const significantHoldings = holdings
+        .filter(t => t.value >= 1)
+        .sort((a, b) => (b.value || 0) - (a.value || 0))
+        .slice(0, 100);
+
+      const updateData: any = {
+        balance: Number(totalValue.toFixed(2)),
+        metadata: {
+          holdings: significantHoldings,
+          holdingsSummary: {
+            total: holdings.length,
+            significant: significantHoldings.length,
+            totalValue: Number(totalValue.toFixed(2))
+          },
+          scannedAt: new Date().toISOString(),
+        }
+      };
+
+      await this.walletsService.update(id, req.user.userId, updateData);
+
+      console.log(`✅ Wallet saved successfully`);
+
+      return {
+        success: true,
+        holdings,
+        totalValue: Number(totalValue.toFixed(2)),
+        tokenCount: holdings.length,
+        scannedAt: new Date().toISOString()
+      };
+    } catch (error) {
+      console.error(`❌ Error scanning wallet:`, error);
+      throw new BadRequestException(
+        `Failed to scan wallet: ${error.message || 'Unknown error'}`
+      );
     }
-    const holdings = await this.walletScannerService.scanWalletBalance(wallet.address, wallet.chain);
-
-    // Calculate total value and save holdings to metadata
-    const totalValue = holdings.reduce((sum, token) => sum + (token.value || 0), 0);
-    await this.walletsService.update(id, req.user.userId, {
-      balance: totalValue,
-      metadata: { holdings, totalValue, scannedAt: new Date().toISOString() }
-    });
-
-    return { holdings, totalValue };
   }
 
   @Get('chain/:chain')
