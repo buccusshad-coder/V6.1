@@ -52,8 +52,15 @@ interface EtherscanTokenTransfer {
 @Injectable()
 export class EtherscanService {
   private readonly apiKey = process.env.ETHERSCAN_API_KEY || 'YourEtherscanAPIKeyHere';
+  private readonly apiKeyAlt = process.env.ETHERSCAN_ALT_API_KEY || '';
+  private readonly alchemyKey = process.env.ALCHEMY_API_KEY || '';
+  private readonly infuraKey = process.env.INFURA_API_KEY || '';
+
   private readonly baseUrl = 'https://api.etherscan.io/api';
   private readonly polygonBaseUrl = 'https://api.polygonscan.com/api';
+
+  private readonly alchemyUrl = 'https://eth-mainnet.alchemyapi.io/v2';
+  private readonly infuraUrl = 'https://mainnet.infura.io/v3';
 
   private getBaseUrl(chain: string): string {
     switch (chain.toLowerCase()) {
@@ -67,6 +74,7 @@ export class EtherscanService {
 
   /**
    * Get all token balances for a wallet
+   * Uses primary API key, falls back to alternate key if needed
    */
   async getTokenBalances(
     walletAddress: string,
@@ -74,17 +82,43 @@ export class EtherscanService {
   ): Promise<EtherscanTokenBalance[]> {
     try {
       const baseUrl = this.getBaseUrl(chain);
-      const response = await axios.get(`${baseUrl}`, {
-        params: {
-          module: 'account',
-          action: 'tokentx',
-          address: walletAddress,
-          startblock: 0,
-          endblock: 99999999,
-          sort: 'desc',
-          apikey: this.apiKey,
-        },
-      });
+      let response = null;
+
+      // Try primary API key
+      try {
+        response = await axios.get(`${baseUrl}`, {
+          params: {
+            module: 'account',
+            action: 'tokentx',
+            address: walletAddress,
+            startblock: 0,
+            endblock: 99999999,
+            sort: 'desc',
+            apikey: this.apiKey,
+          },
+          timeout: 5000,
+        });
+      } catch (primaryError) {
+        console.warn(`Primary API key failed for ${walletAddress}, trying alternate...`);
+
+        // Fallback to alternate API key if available
+        if (this.apiKeyAlt) {
+          response = await axios.get(`${baseUrl}`, {
+            params: {
+              module: 'account',
+              action: 'tokentx',
+              address: walletAddress,
+              startblock: 0,
+              endblock: 99999999,
+              sort: 'desc',
+              apikey: this.apiKeyAlt,
+            },
+            timeout: 5000,
+          });
+        } else {
+          throw primaryError;
+        }
+      }
 
       if (response.data.result === '0' || !Array.isArray(response.data.result)) {
         return [];
@@ -120,7 +154,7 @@ export class EtherscanService {
 
       return Array.from(tokenMap.values());
     } catch (error) {
-      console.error('Error fetching token balances:', error);
+      console.error('Error fetching token balances with fallback:', error);
       return [];
     }
   }
@@ -343,5 +377,114 @@ export class EtherscanService {
    */
   formatAddress(address: string): string {
     return address.substring(0, 10) + '...' + address.substring(address.length - 8);
+  }
+
+  /**
+   * Check API health and key validity
+   */
+  async checkHealth(): Promise<{
+    primary: boolean;
+    alternate: boolean;
+    status: string;
+  }> {
+    const results = {
+      primary: false,
+      alternate: false,
+      status: 'checking...',
+    };
+
+    try {
+      const testAddress = '0x0000000000000000000000000000000000000000';
+
+      // Test primary key
+      try {
+        await axios.get('https://api.etherscan.io/api', {
+          params: {
+            module: 'account',
+            action: 'balance',
+            address: testAddress,
+            tag: 'latest',
+            apikey: this.apiKey,
+          },
+          timeout: 3000,
+        });
+        results.primary = true;
+      } catch (e) {
+        results.primary = false;
+      }
+
+      // Test alternate key
+      if (this.apiKeyAlt) {
+        try {
+          await axios.get('https://api.etherscan.io/api', {
+            params: {
+              module: 'account',
+              action: 'balance',
+              address: testAddress,
+              tag: 'latest',
+              apikey: this.apiKeyAlt,
+            },
+            timeout: 3000,
+          });
+          results.alternate = true;
+        } catch (e) {
+          results.alternate = false;
+        }
+      }
+
+      if (results.primary || results.alternate) {
+        results.status = 'healthy';
+      } else {
+        results.status = 'unhealthy';
+      }
+
+      return results;
+    } catch (error) {
+      results.status = 'error';
+      return results;
+    }
+  }
+
+  /**
+   * Get supported chains
+   */
+  getSupportedChains(): Array<{
+    name: string;
+    id: string;
+    provider: string;
+    apiUrl: string;
+  }> {
+    return [
+      {
+        name: 'Ethereum',
+        id: 'ethereum',
+        provider: 'Etherscan',
+        apiUrl: 'https://api.etherscan.io',
+      },
+      {
+        name: 'Polygon',
+        id: 'polygon',
+        provider: 'Polygonscan',
+        apiUrl: 'https://api.polygonscan.com',
+      },
+      {
+        name: 'Arbitrum One',
+        id: 'arbitrum',
+        provider: 'Arbiscan',
+        apiUrl: 'https://api.arbiscan.io',
+      },
+      {
+        name: 'Base',
+        id: 'base',
+        provider: 'Basescan',
+        apiUrl: 'https://api.basescan.org',
+      },
+      {
+        name: 'Optimism',
+        id: 'optimism',
+        provider: 'Optimistic Etherscan',
+        apiUrl: 'https://api-optimistic.etherscan.io',
+      },
+    ];
   }
 }
