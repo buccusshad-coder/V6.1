@@ -5,6 +5,7 @@ import { Wallet } from './entities/wallet.entity';
 import { CreateWalletDto } from './dto/create-wallet.dto';
 import { UpdateWalletDto } from './dto/update-wallet.dto';
 import { Position } from '../positions/entities/position.entity';
+import { WalletsGateway } from './wallets.gateway';
 
 @Injectable()
 export class WalletsService {
@@ -13,6 +14,7 @@ export class WalletsService {
     private walletsRepository: Repository<Wallet>,
     @InjectRepository(Position)
     private positionsRepository: Repository<Position>,
+    private walletsGateway: WalletsGateway,
   ) {}
 
   async create(userId: string, createWalletDto: CreateWalletDto) {
@@ -34,7 +36,9 @@ export class WalletsService {
       type: createWalletDto.type || 'evm',
     });
 
-    return await this.walletsRepository.save(wallet);
+    const savedWallet = await this.walletsRepository.save(wallet);
+    this.walletsGateway.broadcastWalletCreated(userId, savedWallet);
+    return savedWallet;
   }
 
   async findAll(userId: string) {
@@ -64,7 +68,9 @@ export class WalletsService {
       updateWalletDto,
     );
 
-    return await this.findOne(id, userId);
+    const updatedWallet = await this.findOne(id, userId);
+    this.walletsGateway.broadcastWalletUpdated(userId, updatedWallet);
+    return updatedWallet;
   }
 
   async remove(id: string, userId: string) {
@@ -75,7 +81,8 @@ export class WalletsService {
       { isActive: false },
     );
 
-    return { message: 'Wallet deleted successfully' };
+    this.walletsGateway.broadcastWalletDeleted(userId, id);
+    return { message: 'Wallet deleted successfully', walletId: id };
   }
 
   async getWalletsByChain(userId: string, chain: string) {
@@ -115,5 +122,35 @@ export class WalletsService {
     );
 
     return performance;
+  }
+
+  async getDeletedWallets(userId: string) {
+    return await this.walletsRepository.find({
+      where: { userId, isActive: false },
+      order: { updatedAt: 'DESC' },
+    });
+  }
+
+  async restoreWallet(id: string, userId: string) {
+    const wallet = await this.walletsRepository.findOne({
+      where: { id, userId },
+    });
+
+    if (!wallet) {
+      throw new NotFoundException('Wallet not found');
+    }
+
+    if (wallet.isActive) {
+      throw new BadRequestException('Wallet is already active');
+    }
+
+    await this.walletsRepository.update(
+      { id, userId },
+      { isActive: true },
+    );
+
+    const restoredWallet = await this.findOne(id, userId);
+    this.walletsGateway.broadcastWalletRestored(userId, restoredWallet);
+    return restoredWallet;
   }
 }

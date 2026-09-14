@@ -25,6 +25,16 @@ export class WalletsController {
     return await this.walletsService.getWalletPerformance(req.user.userId);
   }
 
+  @Get('deleted/all')
+  async getDeleted(@Request() req) {
+    return await this.walletsService.getDeletedWallets(req.user.userId);
+  }
+
+  @Post(':id/restore')
+  async restore(@Request() req, @Param('id') id: string) {
+    return await this.walletsService.restoreWallet(id, req.user.userId);
+  }
+
   @Get('chain/:chain')
   async getByChain(@Request() req, @Param('chain') chain: string) {
     return await this.walletsService.getWalletsByChain(req.user.userId, chain);
