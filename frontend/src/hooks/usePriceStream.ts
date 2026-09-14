@@ -1,6 +1,6 @@
-import { useEffect, useRef, useCallback } from 'react';
+import { useEffect, useRef } from 'react';
 import io, { Socket } from 'socket.io-client';
-import { useStore } from '../store';
+import { useStore } from '../store/useStore';
 
 export const usePriceStream = (symbols: string[]) => {
   const socketRef = useRef<Socket | null>(null);
@@ -10,8 +10,7 @@ export const usePriceStream = (symbols: string[]) => {
     const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:3000/api';
     const WEBSOCKET_URL = API_URL.replace('/api', '');
 
-    socketRef.current = io(`${WEBSOCKET_URL}`, {
-      namespace: '/prices',
+    socketRef.current = io(`${WEBSOCKET_URL}/prices`, {
       reconnection: true,
       reconnectionDelay: 1000,
       reconnectionDelayMax: 5000,
