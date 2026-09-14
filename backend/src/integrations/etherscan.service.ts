@@ -84,16 +84,19 @@ export class EtherscanService {
       const baseUrl = this.getBaseUrl(chain);
       let response = null;
 
-      // Try primary API key
+      // Try primary API key - use tokentx to get token transfers
       try {
         response = await axios.get(`${baseUrl}`, {
           params: {
             module: 'account',
-            action: 'tokenlist',
+            action: 'tokentx',
             address: walletAddress,
+            startblock: 0,
+            endblock: 99999999,
+            sort: 'desc',
             apikey: this.apiKey,
           },
-          timeout: 5000,
+          timeout: 10000,
         });
       } catch (primaryError) {
         console.warn(`Primary API key failed for ${walletAddress}, trying alternate...`);
@@ -103,11 +106,14 @@ export class EtherscanService {
           response = await axios.get(`${baseUrl}`, {
             params: {
               module: 'account',
-              action: 'tokenlist',
+              action: 'tokentx',
               address: walletAddress,
+              startblock: 0,
+              endblock: 99999999,
+              sort: 'desc',
               apikey: this.apiKeyAlt,
             },
-            timeout: 5000,
+            timeout: 10000,
           });
         } else {
           throw primaryError;
@@ -118,14 +124,40 @@ export class EtherscanService {
         return [];
       }
 
-      // tokenlist endpoint returns current balances directly
-      return response.data.result.map((token: any) => ({
-        tokenSymbol: token.tokenSymbol || '',
-        tokenName: token.tokenName || '',
-        tokenDecimal: token.tokenDecimal || '18',
-        tokenContractAddress: token.tokenAddress || '',
-        balance: token.balance || '0',
-      }));
+      // Process tokentx results - calculate balance from incoming/outgoing transfers
+      const tokenMap = new Map<string, EtherscanTokenBalance>();
+      const walletLower = walletAddress.toLowerCase();
+
+      response.data.result.forEach((tx: any) => {
+        const key = tx.contractAddress.toLowerCase();
+        const isIncoming = tx.to.toLowerCase() === walletLower;
+
+        if (!tokenMap.has(key)) {
+          tokenMap.set(key, {
+            tokenSymbol: tx.tokenSymbol || '',
+            tokenName: tx.tokenName || '',
+            tokenDecimal: tx.tokenDecimal || '18',
+            tokenContractAddress: tx.contractAddress,
+            balance: '0',
+          });
+        }
+
+        const token = tokenMap.get(key)!;
+        try {
+          const amount = BigInt(tx.value || '0');
+          const currentBalance = BigInt(token.balance || '0');
+          token.balance = (
+            isIncoming
+              ? currentBalance + amount
+              : currentBalance - amount
+          ).toString();
+        } catch (e) {
+          console.warn(`Error processing token value for ${key}:`, e);
+        }
+      });
+
+      // Filter out tokens with zero balance
+      return Array.from(tokenMap.values()).filter(t => BigInt(t.balance || '0') > 0n);
     } catch (error) {
       console.error('Error fetching token balances with fallback:', error);
       return [];
