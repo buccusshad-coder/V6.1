@@ -240,6 +240,84 @@ export class EtherscanService {
   ): Promise<EtherscanTokenTransfer[]> {
     try {
       const baseUrl = this.getBaseUrl(chain);
+
+      // Use V2 API with JSON-RPC
+      const response = await axios.post(`${baseUrl}`, {
+        jsonrpc: '2.0',
+        method: 'eth_getERC20Transfers',
+        params: {
+          fromAddress: walletAddress,
+          toAddress: walletAddress,
+          category: 'external',
+          pageSize: pageSize,
+          pageKey: page > 1 ? `page_${page}` : undefined,
+        },
+        id: 1,
+      }, {
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        params: {
+          apikey: this.apiKey,
+        },
+        timeout: 15000,
+      });
+
+      // Check for error responses
+      if (response.data.error) {
+        console.warn(`Etherscan V2 error for ${walletAddress}: ${response.data.error.message}`);
+        // Fallback to V1 if V2 fails
+        return await this.getTokenTransfersV1(walletAddress, chain, page, pageSize);
+      }
+
+      if (!response.data.result || !Array.isArray(response.data.result.transfers)) {
+        console.log(`No token transfers found for ${walletAddress}`);
+        return [];
+      }
+
+      const transfers = response.data.result.transfers;
+      console.log(`Found ${transfers.length} token transfers for ${walletAddress}`);
+
+      // Convert V2 format to V1 format for compatibility
+      return transfers.map((tx: any) => ({
+        blockNumber: tx.blockNum,
+        timeStamp: Math.floor(new Date(tx.blockTime).getTime() / 1000).toString(),
+        hash: tx.hash,
+        nonce: '0',
+        blockHash: '',
+        from: tx.from,
+        contractAddress: tx.rawContractAddress || tx.to,
+        to: tx.to,
+        value: tx.value || '0',
+        tokenName: tx.tokenSymbol || 'Unknown',
+        tokenSymbol: tx.tokenSymbol || 'UNKNOWN',
+        tokenDecimal: tx.tokenDecimal || '18',
+        transactionIndex: '0',
+        gas: tx.gas || '0',
+        gasPrice: tx.gasPrice || '0',
+        gasUsed: '0',
+        cumulativeGasUsed: '0',
+        input: '',
+        confirmations: '0',
+      }));
+    } catch (error) {
+      console.error('Error fetching token transfers from V2:', error);
+      // Fallback to V1
+      return await this.getTokenTransfersV1(walletAddress, chain, page, pageSize);
+    }
+  }
+
+  /**
+   * V1 API fallback for token transfers
+   */
+  private async getTokenTransfersV1(
+    walletAddress: string,
+    chain: string = 'ethereum',
+    page: number = 1,
+    pageSize: number = 100,
+  ): Promise<EtherscanTokenTransfer[]> {
+    try {
+      const baseUrl = this.getBaseUrl(chain);
       const response = await axios.get(`${baseUrl}`, {
         params: {
           module: 'account',
@@ -252,11 +330,11 @@ export class EtherscanService {
           sort: 'desc',
           apikey: this.apiKey,
         },
+        timeout: 15000,
       });
 
-      // Check for error responses
       if (response.data.status === '0' || response.data.message === 'NOTOK') {
-        console.warn(`Etherscan error for ${walletAddress}: ${response.data.message} - ${response.data.result}`);
+        console.warn(`Etherscan V1 error for ${walletAddress}: ${response.data.message}`);
         return [];
       }
 
@@ -265,10 +343,10 @@ export class EtherscanService {
         return [];
       }
 
-      console.log(`Found ${response.data.result.length} token transfers for ${walletAddress}`);
+      console.log(`Found ${response.data.result.length} token transfers from V1 fallback`);
       return response.data.result;
     } catch (error) {
-      console.error('Error fetching token transfers:', error);
+      console.error('Error fetching token transfers from V1 fallback:', error);
       return [];
     }
   }
