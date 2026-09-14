@@ -91,14 +91,28 @@ docker ps --format "table {{.Names}}\t{{.Status}}"
 
 ### Backend (.env)
 ```
+# Database
 DB_HOST=postgres
 DB_PORT=5432
 DB_USERNAME=tracker
 DB_PASSWORD=tracker_password
 DB_NAME=tracker_v7
+
+# JWT
 JWT_SECRET=tracker_v7_dev_secret_key_1234567890_change_in_prod
+
+# Redis
 REDIS_HOST=redis
 REDIS_PORT=6379
+
+# External APIs - Blockchain Data
+ETHERSCAN_API_KEY=your-etherscan-api-key
+POLYGONSCAN_API_KEY=your-polygonscan-api-key
+ALCHEMY_API_KEY=your-alchemy-api-key
+HELIUS_API_KEY=your-helius-api-key
+
+# Price Data
+COINGECKO_API_KEY=optional-coingecko-api-key
 ```
 
 ### Frontend (.env)
@@ -106,6 +120,36 @@ REDIS_PORT=6379
 REACT_APP_API_URL=http://localhost:3000/api
 REACT_APP_WEBSOCKET_URL=ws://localhost:3000
 ```
+
+---
+
+## 🔗 External API Setup
+
+### Etherscan Integration (Wallet Scanning)
+1. **Register at [Etherscan.io](https://etherscan.io)**
+2. **Get Free API Key**: No payment required for free tier
+3. **Free Limits**: 5 calls/second, 100,000 calls/day
+4. **Set in .env**: `ETHERSCAN_API_KEY=your-key-here`
+
+### Polygonscan Integration (Polygon Chain)
+1. **Register at [Polygonscan.com](https://polygonscan.com)**
+2. **Get Free API Key**: Same as Etherscan
+3. **Set in .env**: `POLYGONSCAN_API_KEY=your-key-here`
+
+### Supported Chains
+- ✅ **Ethereum** - via Etherscan API
+- ✅ **Polygon** - via Polygonscan API
+- ⏳ **Arbitrum** - via Arbiscan API (similar setup)
+- ⏳ **Base** - via Basescan API (similar setup)
+- ⏳ **Optimism** - via Optimistic Etherscan API (similar setup)
+
+### What the Etherscan Integration Provides
+1. **Real-time Token Balances** - Fetch all tokens held in a wallet
+2. **Transaction History** - Get complete token transfer history
+3. **Token Metadata** - Retrieve token name, symbol, decimals
+4. **Swap Detection** - Analyze transaction patterns to identify swaps
+5. **Gas Information** - Get current gas prices and historical data
+6. **Balance Calculations** - Track token flow from history
 
 ---
 
