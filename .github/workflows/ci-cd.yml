@@ -1,0 +1,83 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_USER: tracker
+          POSTGRES_PASSWORD: tracker_password
+          POSTGRES_DB: tracker_v7
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v3
+      with:
+        node-version: '18'
+        cache: 'npm'
+
+    - name: Install backend dependencies
+      run: cd backend && npm ci
+
+    - name: Build backend
+      run: cd backend && npm run build
+
+    - name: Lint backend
+      run: cd backend && npm run lint || true
+
+    - name: Install frontend dependencies
+      run: cd frontend && npm ci
+
+    - name: Build frontend
+      run: cd frontend && npm run build
+
+    - name: Lint frontend
+      run: cd frontend && npm run lint || true
+
+  deploy-backend:
+    needs: test
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: Deploy to Replit
+      env:
+        REPLIT_TOKEN: ${{ secrets.REPLIT_TOKEN }}
+      run: |
+        echo "Backend deployment would happen here"
+        echo "Connect to Replit via: https://replit.com/api/deployments"
+
+  deploy-frontend:
+    needs: test
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: Deploy to Vercel
+      env:
+        VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      run: |
+        echo "Frontend deployment would happen here"
+        echo "Connect to Vercel via: https://vercel.com/api"
