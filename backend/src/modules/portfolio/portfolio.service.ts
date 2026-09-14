@@ -70,4 +70,56 @@ export class PortfolioService {
       history: [],
     };
   }
+
+  async getPortfolioByWallet(userId: string) {
+    const wallets = await this.walletRepository.find({
+      where: { userId, isActive: true },
+      order: { createdAt: 'DESC' },
+    });
+
+    const portfolioByWallet = await Promise.all(
+      wallets.map(async (wallet) => {
+        const positions = await this.positionRepository.find({
+          where: { walletId: wallet.id },
+        });
+
+        const totalValue = positions.reduce(
+          (sum, p) => sum + parseFloat(p.amount.toString()) * parseFloat(p.currentPrice?.toString() || '0'),
+          0,
+        );
+
+        const totalCost = positions.reduce(
+          (sum, p) => sum + parseFloat(p.amount.toString()) * parseFloat(p.entryPrice?.toString() || '0'),
+          0,
+        );
+
+        const pnl = totalValue - totalCost;
+        const roi = totalCost > 0 ? (pnl / totalCost) * 100 : 0;
+
+        return {
+          walletId: wallet.id,
+          walletName: wallet.name,
+          chain: wallet.chain,
+          address: wallet.address,
+          positions: positions.map((p) => ({
+            id: p.id,
+            symbol: p.symbol,
+            amount: p.amount,
+            entryPrice: p.entryPrice,
+            currentPrice: p.currentPrice,
+            value: parseFloat(p.amount.toString()) * parseFloat(p.currentPrice?.toString() || '0'),
+            pnl: (parseFloat(p.currentPrice?.toString() || '0') - parseFloat(p.entryPrice?.toString() || '0')) * parseFloat(p.amount.toString()),
+            roi: ((parseFloat(p.currentPrice?.toString() || '0') - parseFloat(p.entryPrice?.toString() || '0')) / parseFloat(p.entryPrice?.toString() || '1')) * 100,
+          })),
+          totalValue: parseFloat(totalValue.toFixed(2)),
+          totalCost: parseFloat(totalCost.toFixed(2)),
+          totalPnL: parseFloat(pnl.toFixed(2)),
+          totalROI: parseFloat(roi.toFixed(2)),
+          positionCount: positions.length,
+        };
+      }),
+    );
+
+    return portfolioByWallet;
+  }
 }
