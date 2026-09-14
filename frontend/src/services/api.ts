@@ -1,6 +1,6 @@
 import axios, { AxiosInstance, AxiosError } from 'axios';
 
-const API_URL = 'https://hypocoristically-thriftless-danille.ngrok-free.dev/api';
+const API_URL = 'https://viewers-purpose-antonio-orange.trycloudflare.com/api';
 
 class ApiService {
   private api: AxiosInstance;
