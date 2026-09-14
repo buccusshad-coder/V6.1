@@ -89,11 +89,8 @@ export class EtherscanService {
         response = await axios.get(`${baseUrl}`, {
           params: {
             module: 'account',
-            action: 'tokentx',
+            action: 'tokenlist',
             address: walletAddress,
-            startblock: 0,
-            endblock: 99999999,
-            sort: 'desc',
             apikey: this.apiKey,
           },
           timeout: 5000,
@@ -106,11 +103,8 @@ export class EtherscanService {
           response = await axios.get(`${baseUrl}`, {
             params: {
               module: 'account',
-              action: 'tokentx',
+              action: 'tokenlist',
               address: walletAddress,
-              startblock: 0,
-              endblock: 99999999,
-              sort: 'desc',
               apikey: this.apiKeyAlt,
             },
             timeout: 5000,
@@ -120,39 +114,18 @@ export class EtherscanService {
         }
       }
 
-      if (response.data.result === '0' || !Array.isArray(response.data.result)) {
+      if (!response.data.result || !Array.isArray(response.data.result) || response.data.result.length === 0) {
         return [];
       }
 
-      // Group by token and sum balances
-      const tokenMap = new Map<string, EtherscanTokenBalance>();
-
-      response.data.result.forEach((tx: EtherscanTokenTransfer) => {
-        const key = tx.contractAddress.toLowerCase();
-        const isIncoming = tx.to.toLowerCase() === walletAddress.toLowerCase();
-
-        if (!tokenMap.has(key)) {
-          tokenMap.set(key, {
-            tokenSymbol: tx.tokenSymbol,
-            tokenName: tx.tokenName,
-            tokenDecimal: tx.tokenDecimal,
-            tokenContractAddress: tx.contractAddress,
-            balance: '0',
-          });
-        }
-
-        const token = tokenMap.get(key)!;
-        const amount = BigInt(tx.value);
-        const currentBalance = BigInt(token.balance);
-
-        token.balance = (
-          isIncoming
-            ? currentBalance + amount
-            : currentBalance - amount
-        ).toString();
-      });
-
-      return Array.from(tokenMap.values());
+      // tokenlist endpoint returns current balances directly
+      return response.data.result.map((token: any) => ({
+        tokenSymbol: token.tokenSymbol || '',
+        tokenName: token.tokenName || '',
+        tokenDecimal: token.tokenDecimal || '18',
+        tokenContractAddress: token.tokenAddress || '',
+        balance: token.balance || '0',
+      }));
     } catch (error) {
       console.error('Error fetching token balances with fallback:', error);
       return [];
