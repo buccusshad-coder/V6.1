@@ -18,8 +18,12 @@ interface WalletDetails {
   name: string;
   address: string;
   chain: string;
-  holdings: Token[];
-  totalValue: number;
+  balance: number;
+  metadata?: {
+    holdings: Token[];
+    totalValue: number;
+    scannedAt: string;
+  };
 }
 
 export default function WalletPortfolio() {
@@ -50,7 +54,9 @@ export default function WalletPortfolio() {
   if (error) return <div className="alert alert-error">{error}</div>;
   if (!wallet) return <div className="alert alert-error">Wallet not found</div>;
 
-  const sortedTokens = [...(wallet.holdings || [])].sort((a, b) => b.value - a.value);
+  const holdings = wallet.metadata?.holdings || [];
+  const totalValue = wallet.metadata?.totalValue || wallet.balance || 0;
+  const sortedTokens = [...holdings].sort((a, b) => b.value - a.value);
 
   return (
     <>
@@ -70,7 +76,7 @@ export default function WalletPortfolio() {
         <div className="portfolio-summary">
           <div className="summary-card">
             <h3>Total Portfolio Value</h3>
-            <p className="total-value">${wallet.totalValue?.toFixed(2) || '0.00'}</p>
+            <p className="total-value">${totalValue.toFixed(2)}</p>
           </div>
           <div className="summary-card">
             <h3>Assets</h3>
@@ -109,8 +115,8 @@ export default function WalletPortfolio() {
                     })}
                   </div>
                   <div className="col-percent">
-                    {wallet.totalValue > 0
-                      ? ((token.value / wallet.totalValue) * 100).toFixed(2)
+                    {totalValue > 0
+                      ? ((token.value / totalValue) * 100).toFixed(2)
                       : '0.00'}
                     %
                   </div>

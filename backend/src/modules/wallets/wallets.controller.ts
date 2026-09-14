@@ -40,12 +40,21 @@ export class WalletsController {
   }
 
   @Post(':id/scan')
-  async scanWallet(@Request() req, @Param('id') id: string): Promise<TokenBalance[]> {
+  async scanWallet(@Request() req, @Param('id') id: string): Promise<any> {
     const wallet = await this.walletsService.findOne(id, req.user.userId);
     if (!wallet) {
       throw new BadRequestException('Wallet not found');
     }
-    return await this.walletScannerService.scanWalletBalance(wallet.address, wallet.chain);
+    const holdings = await this.walletScannerService.scanWalletBalance(wallet.address, wallet.chain);
+
+    // Calculate total value and save holdings to metadata
+    const totalValue = holdings.reduce((sum, token) => sum + (token.value || 0), 0);
+    await this.walletsService.update(id, req.user.userId, {
+      balance: totalValue,
+      metadata: { holdings, totalValue, scannedAt: new Date().toISOString() }
+    });
+
+    return { holdings, totalValue };
   }
 
   @Get('chain/:chain')
