@@ -1,0 +1,125 @@
+import React, { useEffect, useState } from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
+import Navigation from '../components/Navigation';
+import api from '../services/api';
+import '../styles/WalletPortfolio.css';
+
+interface Token {
+  symbol: string;
+  name: string;
+  address: string;
+  amount: string;
+  decimals: number;
+  value: number;
+}
+
+interface WalletDetails {
+  id: string;
+  name: string;
+  address: string;
+  chain: string;
+  holdings: Token[];
+  totalValue: number;
+}
+
+export default function WalletPortfolio() {
+  const { id } = useParams<{ id: string }>();
+  const navigate = useNavigate();
+  const [wallet, setWallet] = useState<WalletDetails | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    if (id) fetchWallet();
+  }, [id]);
+
+  const fetchWallet = async () => {
+    try {
+      setLoading(true);
+      const response = await api.getWallet(id!);
+      setWallet(response.data);
+      setError('');
+    } catch (err: any) {
+      setError(err.response?.data?.message || 'Failed to load wallet');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (loading) return <div className="loading">Loading portfolio...</div>;
+  if (error) return <div className="alert alert-error">{error}</div>;
+  if (!wallet) return <div className="alert alert-error">Wallet not found</div>;
+
+  const sortedTokens = [...(wallet.holdings || [])].sort((a, b) => b.value - a.value);
+
+  return (
+    <>
+      <Navigation />
+      <div className="portfolio-container">
+        <div className="portfolio-header">
+          <button onClick={() => navigate('/wallets')} className="btn-back">
+            ← Back
+          </button>
+          <div>
+            <h1>{wallet.name}</h1>
+            <p className="wallet-address">{wallet.address}</p>
+            <p className="wallet-chain">{wallet.chain.toUpperCase()}</p>
+          </div>
+        </div>
+
+        <div className="portfolio-summary">
+          <div className="summary-card">
+            <h3>Total Portfolio Value</h3>
+            <p className="total-value">${wallet.totalValue?.toFixed(2) || '0.00'}</p>
+          </div>
+          <div className="summary-card">
+            <h3>Assets</h3>
+            <p className="assets-count">{sortedTokens.length}</p>
+          </div>
+        </div>
+
+        <div className="holdings-section">
+          <h2>Holdings</h2>
+          {sortedTokens.length === 0 ? (
+            <p className="empty">No tokens found in this wallet</p>
+          ) : (
+            <div className="holdings-table">
+              <div className="table-header">
+                <div className="col-symbol">Asset</div>
+                <div className="col-amount">Amount</div>
+                <div className="col-value">Value</div>
+                <div className="col-percent">% of Portfolio</div>
+              </div>
+              {sortedTokens.map((token, idx) => (
+                <div key={idx} className="table-row">
+                  <div className="col-symbol">
+                    <strong>{token.symbol}</strong>
+                    <small>{token.name}</small>
+                  </div>
+                  <div className="col-amount">
+                    {parseFloat(token.amount).toLocaleString(undefined, {
+                      minimumFractionDigits: 2,
+                      maximumFractionDigits: 8,
+                    })}
+                  </div>
+                  <div className="col-value">
+                    ${token.value.toLocaleString(undefined, {
+                      minimumFractionDigits: 2,
+                      maximumFractionDigits: 2,
+                    })}
+                  </div>
+                  <div className="col-percent">
+                    {wallet.totalValue > 0
+                      ? ((token.value / wallet.totalValue) * 100).toFixed(2)
+                      : '0.00'}
+                    %
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    </>
+  );
+}

@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import Navigation from '../components/Navigation';
 import api from '../services/api';
 import '../styles/Wallets.css';
@@ -14,6 +15,7 @@ interface Wallet {
 }
 
 export default function Wallets() {
+  const navigate = useNavigate();
   const [wallets, setWallets] = useState<Wallet[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
@@ -95,8 +97,7 @@ export default function Wallets() {
     try {
       setError('');
       await api.scanWallet(walletId);
-      setSuccess('Wallet scanned successfully!');
-      await fetchWallets();
+      navigate(`/wallets/${walletId}/portfolio`);
     } catch (err: any) {
       setError(err.response?.data?.message || 'Failed to scan wallet');
     }

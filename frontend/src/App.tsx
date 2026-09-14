@@ -6,6 +6,7 @@ const Dashboard = React.lazy(() => import('./pages/Dashboard'));
 const Login = React.lazy(() => import('./pages/Login'));
 const Register = React.lazy(() => import('./pages/Register'));
 const Wallets = React.lazy(() => import('./pages/Wallets'));
+const WalletPortfolio = React.lazy(() => import('./pages/WalletPortfolio'));
 const Positions = React.lazy(() => import('./pages/Positions'));
 const Transactions = React.lazy(() => import('./pages/Transactions'));
 const Portfolio = React.lazy(() => import('./pages/Portfolio'));
@@ -38,6 +39,14 @@ export default function App() {
             element={
               <PrivateRoute>
                 <Wallets />
+              </PrivateRoute>
+            }
+          />
+          <Route
+            path="/wallets/:id/portfolio"
+            element={
+              <PrivateRoute>
+                <WalletPortfolio />
               </PrivateRoute>
             }
           />
