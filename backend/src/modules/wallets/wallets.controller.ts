@@ -20,6 +20,16 @@ export class WalletsController {
     return await this.walletsService.create(req.user.userId, createWalletDto);
   }
 
+  @Get('performance')
+  async getPerformance(@Request() req) {
+    return await this.walletsService.getWalletPerformance(req.user.userId);
+  }
+
+  @Get('chain/:chain')
+  async getByChain(@Request() req, @Param('chain') chain: string) {
+    return await this.walletsService.getWalletsByChain(req.user.userId, chain);
+  }
+
   @Get()
   async findAll(@Request() req) {
     return await this.walletsService.findAll(req.user.userId);
@@ -42,10 +52,5 @@ export class WalletsController {
   @Delete(':id')
   async remove(@Request() req, @Param('id') id: string) {
     return await this.walletsService.remove(id, req.user.userId);
-  }
-
-  @Get('chain/:chain')
-  async getByChain(@Request() req, @Param('chain') chain: string) {
-    return await this.walletsService.getWalletsByChain(req.user.userId, chain);
   }
 }

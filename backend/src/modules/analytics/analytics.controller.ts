@@ -8,22 +8,22 @@ export class AnalyticsController {
   constructor(private readonly analyticsService: AnalyticsService) {}
 
   @Get('portfolio')
-  getPortfolioAnalytics(@Request() req) {
-    return this.analyticsService.getPortfolioAnalytics(req.user.userId);
+  async getPortfolioAnalytics(@Request() req): Promise<any> {
+    return await this.analyticsService.getPortfolioAnalytics(req.user.userId);
   }
 
   @Get('chain-distribution')
-  getChainDistribution(@Request() req) {
-    return this.analyticsService.getChainDistribution(req.user.userId);
+  async getChainDistribution(@Request() req): Promise<Record<string, number>> {
+    return await this.analyticsService.getChainDistribution(req.user.userId);
   }
 
   @Get('symbol-distribution')
-  getSymbolDistribution(@Request() req) {
-    return this.analyticsService.getSymbolDistribution(req.user.userId);
+  async getSymbolDistribution(@Request() req): Promise<Record<string, number>> {
+    return await this.analyticsService.getSymbolDistribution(req.user.userId);
   }
 
   @Get('performance')
-  getPerformanceMetrics(@Request() req) {
-    return this.analyticsService.getPerformanceMetrics(req.user.userId);
+  async getPerformanceMetrics(@Request() req): Promise<any> {
+    return await this.analyticsService.getPerformanceMetrics(req.user.userId);
   }
 }
