@@ -1,0 +1,8 @@
+{
+  "deployments": [
+    {
+      "root": "backend",
+      "module": "main.js"
+    }
+  ]
+}
