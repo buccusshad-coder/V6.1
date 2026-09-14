@@ -55,7 +55,7 @@ export default function WalletPortfolio() {
   if (!wallet) return <div className="alert alert-error">Wallet not found</div>;
 
   const holdings = wallet.metadata?.holdings || [];
-  const totalValue = wallet.metadata?.totalValue || wallet.balance || 0;
+  const totalValue = parseFloat(String(wallet.metadata?.totalValue || wallet.balance || 0));
   const sortedTokens = [...holdings].sort((a, b) => b.value - a.value);
 
   return (
