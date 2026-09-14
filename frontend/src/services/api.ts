@@ -37,8 +37,12 @@ class ApiService {
   }
 
   // Auth
-  register(email: string, password: string) {
-    return this.api.post('/auth/register', { email, password });
+  register(email: string, password: string, password_confirmation?: string) {
+    return this.api.post('/auth/register', {
+      email,
+      password,
+      password_confirmation: password_confirmation || password
+    });
   }
 
   login(email: string, password: string) {

@@ -23,8 +23,8 @@ export default function Register() {
     setLoading(true);
 
     try {
-      await api.register(email, password);
-      navigate('/login');
+      await api.register(email, password, confirmPassword);
+      navigate('/dashboard');
     } catch (err: any) {
       setError(err.response?.data?.message || 'Registration failed');
     } finally {
