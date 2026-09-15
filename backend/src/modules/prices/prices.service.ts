@@ -1,13 +1,21 @@
 import { Injectable } from '@nestjs/common';
 import axios from 'axios';
 
+interface PriceSource {
+  source: string;
+  price: number;
+  confidence: number; // 0-1, higher = more reliable
+}
+
 @Injectable()
 export class PricesService {
   private readonly COINGECKO_API = 'https://api.coingecko.com/api/v3';
+  private readonly UNISWAP_SUBGRAPH = 'https://api.thegraph.com/subgraphs/name/uniswap/uniswap-v3';
+  private readonly BIRDEYE_API = 'https://public-api.birdeye.so';
   private priceCache = new Map<string, any>();
-  private cacheExpiry = 600000; // 10 minutes (longer cache = fewer API calls)
+  private cacheExpiry = 600000; // 10 minutes
   private lastApiCall = 0;
-  private minDelayBetweenCalls = 500; // 500ms between CoinGecko calls (free tier limit)
+  private minDelayBetweenCalls = 300; // 300ms between API calls
 
   /**
    * Get price by contract address (more reliable for obscure tokens)
@@ -21,42 +29,75 @@ export class PricesService {
     }
 
     try {
-      // Try CoinGecko first
+      const priceSources: PriceSource[] = [];
+
+      // Try Uniswap V3 (most accurate for EVM)
+      if (chain.toLowerCase() === 'ethereum' || chain.toLowerCase() === 'polygon') {
+        const uniPrice = await this.tryGetPriceFromUniswapV3(contractAddress);
+        if (uniPrice) {
+          priceSources.push({ source: 'uniswap-v3', price: uniPrice, confidence: 0.95 });
+        }
+      }
+
+      // Try Birdeye (Solana-specific)
+      if (chain.toLowerCase() === 'solana') {
+        const birdeyePrice = await this.tryGetPriceFromBirdeye(contractAddress, chain);
+        if (birdeyePrice) {
+          priceSources.push({ source: 'birdeye', price: birdeyePrice, confidence: 0.9 });
+        }
+      }
+
+      // Try CoinGecko (reliable for major tokens)
       const cgPrice = await this.tryGetPriceFromCoinGecko(contractAddress, chain);
       if (cgPrice && cgPrice.price > 0) {
-        this.priceCache.set(cacheKey, cgPrice);
-        return cgPrice;
+        priceSources.push({ source: 'coingecko', price: cgPrice.price, confidence: 0.8 });
       }
 
-      // Fallback to CoinMarketCap for meme coins
+      // Try CoinMarketCap (backup)
       const cmcPrice = await this.tryGetPriceFromCoinMarketCap(contractAddress);
       if (cmcPrice && cmcPrice.price > 0) {
-        this.priceCache.set(cacheKey, cmcPrice);
-        return cmcPrice;
+        priceSources.push({ source: 'coinmarketcap', price: cmcPrice.price, confidence: 0.7 });
       }
 
-      // Fallback to DEX for on-chain prices (1inch for Ethereum, Jupiter for Solana, etc)
-      const dexPrice = await this.tryGetPriceFromDex(contractAddress, chain);
-      if (dexPrice && dexPrice.price > 0) {
-        this.priceCache.set(cacheKey, dexPrice);
-        return dexPrice;
+      // Try 1inch DEX (fallback for EVM)
+      if (chain.toLowerCase() === 'ethereum') {
+        const dexPrice = await this.tryGetPriceFromDex(contractAddress, chain);
+        if (dexPrice && dexPrice.price > 0) {
+          priceSources.push({ source: 'dex-1inch', price: dexPrice.price, confidence: 0.75 });
+        }
+      }
+
+      // Aggregate prices from all sources
+      if (priceSources.length > 0) {
+        const aggregatedPrice = this.aggregatePrices(priceSources);
+        const priceData = {
+          address: contractAddress,
+          price: aggregatedPrice,
+          current_price: aggregatedPrice,
+          sources: priceSources.map(s => s.source).join(', '),
+          fetchedAt: Date.now(),
+        };
+        this.priceCache.set(cacheKey, priceData);
+        return priceData;
       }
 
       // Return zero price if all sources fail
-      const priceData = cgPrice || cmcPrice || {
+      const fallback = {
         address: contractAddress,
         price: 0,
         current_price: 0,
+        sources: 'none',
         fetchedAt: Date.now(),
       };
-      this.priceCache.set(cacheKey, priceData);
-      return priceData;
+      this.priceCache.set(cacheKey, fallback);
+      return fallback;
     } catch (error) {
       console.warn(`⚠️  Failed to fetch price for address ${contractAddress}:`, error.message);
       return {
         address: contractAddress,
         price: 0,
         current_price: 0,
+        sources: 'error',
         fetchedAt: Date.now(),
       };
     }
@@ -136,6 +177,85 @@ export class PricesService {
           current_price: quote.price,
           source: 'coinmarketcap',
         };
+      }
+      return null;
+    } catch (error) {
+      return null;
+    }
+  }
+
+  /**
+   * Aggregate prices from multiple sources, prefer DEX > CoinGecko > CoinMarketCap
+   */
+  private aggregatePrices(sources: PriceSource[]): number {
+    if (sources.length === 0) return 0;
+
+    // Sort by confidence descending
+    sources.sort((a, b) => b.confidence - a.confidence);
+
+    // If highest confidence is DEX, use it
+    if (sources[0].source.includes('dex') || sources[0].source.includes('uniswap')) {
+      return sources[0].price;
+    }
+
+    // Otherwise take weighted average of top 2-3 sources
+    const topSources = sources.slice(0, 3);
+    const totalConfidence = topSources.reduce((sum, s) => sum + s.confidence, 0);
+    const weightedPrice = topSources.reduce((sum, s) => sum + (s.price * s.confidence), 0) / totalConfidence;
+
+    return weightedPrice;
+  }
+
+  private async tryGetPriceFromUniswapV3(contractAddress: string): Promise<number | null> {
+    try {
+      await this.throttleApiCall();
+
+      const query = `
+        query {
+          tokens(first: 1, where: { id: "${contractAddress.toLowerCase()}" }) {
+            id
+            symbol
+            derivedETH
+          }
+          bundle(id: "1") {
+            ethPriceUSD
+          }
+        }
+      `;
+
+      const response = await axios.post(
+        this.UNISWAP_SUBGRAPH,
+        { query },
+        { timeout: 5000 }
+      );
+
+      const token = response.data?.data?.tokens?.[0];
+      const ethPrice = parseFloat(response.data?.data?.bundle?.ethPriceUSD || '0');
+
+      if (token && ethPrice && parseFloat(token.derivedETH) > 0) {
+        const price = parseFloat(token.derivedETH) * ethPrice;
+        if (price > 0) {
+          return price;
+        }
+      }
+      return null;
+    } catch (error) {
+      return null;
+    }
+  }
+
+  private async tryGetPriceFromBirdeye(tokenAddress: string, chain: string = 'solana'): Promise<number | null> {
+    try {
+      await this.throttleApiCall();
+
+      const response = await axios.get(
+        `${this.BIRDEYE_API}/defi/price?address=${tokenAddress}`,
+        { timeout: 5000 }
+      );
+
+      const price = response.data?.data?.value;
+      if (price && parseFloat(price) > 0) {
+        return parseFloat(price);
       }
       return null;
     } catch (error) {
