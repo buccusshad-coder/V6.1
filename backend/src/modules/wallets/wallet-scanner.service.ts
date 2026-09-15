@@ -188,29 +188,16 @@ export class WalletScannerService {
         let tokenPrice = 0;
 
         try {
-          // Try contract address lookup ONLY (most accurate for meme coins, prevents symbol collisions)
-          const priceData = await this.pricesService.getPriceByAddress(token.contractAddress, chain);
+          // Get price using contract address, with symbol for whitelisted fallback
+          const priceData = await this.pricesService.getPriceByAddress(
+            token.contractAddress,
+            chain,
+            token.symbol  // Pass symbol - getPriceByAddress will use whitelist for fallback
+          );
           tokenPrice = parseFloat(priceData.current_price) || parseFloat(priceData.price) || 0;
-
-          // Only use symbol fallback for major tokens to prevent WOLF collisions
-          if (tokenPrice === 0 && ['ETH', 'SOL', 'USDC', 'USDT', 'DAI', 'WETH', 'WSOL'].includes(token.symbol.toUpperCase())) {
-            try {
-              const symbolData = await this.pricesService.getLatestPrice(token.symbol.toLowerCase());
-              tokenPrice = parseFloat(symbolData.current_price) || 0;
-            } catch (e2) {
-              // Price stays 0
-            }
-          }
         } catch (e) {
-          // Contract address lookup failed - only try symbol for major tokens
-          if (['ETH', 'SOL', 'USDC', 'USDT', 'DAI', 'WETH', 'WSOL'].includes(token.symbol.toUpperCase())) {
-            try {
-              const priceData = await this.pricesService.getLatestPrice(token.symbol.toLowerCase());
-              tokenPrice = parseFloat(priceData.current_price) || 0;
-            } catch (e2) {
-              tokenPrice = 0;
-            }
-          }
+          // Price defaults to 0 if all sources fail
+          tokenPrice = 0;
         }
 
         return {

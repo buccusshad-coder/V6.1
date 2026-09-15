@@ -16,11 +16,19 @@ export class PricesService {
   private lastApiCall = 0;
   private minDelayBetweenCalls = 200; // 200ms between API calls
 
+  // Whitelist of tokens with non-colliding symbols (real tokens, not meme coins)
+  private readonly SYMBOL_WHITELIST = new Set([
+    'eth', 'usdc', 'usdt', 'dai', 'weth', 'wsol', 'sol', 'avax', 'matic', 'bnb',
+    'near', 'inj', 'qnt', 'render', 'rndr', 'vita', 'joe', 'ondo', 'imx', 'virtual',
+    'degen', 'anime', 'banana', 'lcx', 'aster', 'toshi', 'blast', 'rekt',
+    'link', 'uni', 'aave', 'curve', 'crv', 'comp', 'mkr', 'snx', 'sushi'
+  ])
+
   /**
    * Get price by contract address using DexScreener (best for all tokens including memes)
    * DexScreener aggregates DEX prices - works for every token with liquidity
    */
-  async getPriceByAddress(contractAddress: string, chain: string = 'ethereum') {
+  async getPriceByAddress(contractAddress: string, chain: string = 'ethereum', tokenSymbol?: string) {
     const cacheKey = `addr:${contractAddress}`;
     const cached = this.priceCache.get(cacheKey);
     if (cached && Date.now() - cached.fetchedAt < this.cacheExpiry) {
@@ -30,19 +38,41 @@ export class PricesService {
     try {
       // PRIMARY: Try DexScreener first (works for ALL tokens with DEX liquidity)
       const dexPrice = await this.tryGetPriceFromDexScreener(contractAddress, chain);
-      if (dexPrice) {
+      if (dexPrice && dexPrice.price > 0) {
         this.priceCache.set(cacheKey, { ...dexPrice, source: 'dexscreener' });
         return { ...dexPrice, source: 'dexscreener', current_price: dexPrice.price };
       }
 
-      // FALLBACK: CoinGecko for major tokens not on DEX (contract address only, no symbol collisions)
+      // FALLBACK 1: CoinGecko contract address lookup
       const cgPrice = await this.tryGetPriceFromCoinGecko(contractAddress, chain);
       if (cgPrice && cgPrice.price > 0) {
         this.priceCache.set(cacheKey, cgPrice);
         return cgPrice;
       }
 
-      // Return zero price if all sources fail - DO NOT use symbol fallback (causes symbol collisions like WOLF)
+      // FALLBACK 2: 1inch DEX for Ethereum, Jupiter for Solana
+      if (chain.toLowerCase() === 'ethereum' || chain.toLowerCase() === 'solana') {
+        const dexPrice = await this.tryGetPriceFromDex(contractAddress, chain);
+        if (dexPrice && dexPrice.price > 0) {
+          this.priceCache.set(cacheKey, dexPrice);
+          return dexPrice;
+        }
+      }
+
+      // FALLBACK 3: SMART SYMBOL LOOKUP - Only for whitelisted tokens (prevents symbol collisions like WOLF)
+      if (tokenSymbol && this.SYMBOL_WHITELIST.has(tokenSymbol.toLowerCase())) {
+        try {
+          const symbolPrice = await this.getLatestPrice(tokenSymbol.toLowerCase());
+          if (symbolPrice && symbolPrice.current_price > 0) {
+            this.priceCache.set(cacheKey, symbolPrice);
+            return symbolPrice;
+          }
+        } catch (e) {
+          // Fall through to zero price
+        }
+      }
+
+      // No price found - return zero price
       const fallback = {
         address: contractAddress,
         price: 0,
