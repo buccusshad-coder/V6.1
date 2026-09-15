@@ -1,6 +1,6 @@
 import axios, { AxiosInstance, AxiosError } from 'axios';
 
-const API_URL = process.env.NODE_ENV === 'production'
+const API_URL = process.env.NODE_ENV === 'production' && typeof window !== 'undefined' && !window.location.hostname.includes('localhost')
   ? 'https://viewers-purpose-antonio-orange.trycloudflare.com/api'
   : 'http://localhost:3000/api';
 
