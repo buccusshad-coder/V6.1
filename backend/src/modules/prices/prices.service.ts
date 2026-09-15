@@ -190,20 +190,27 @@ export class PricesService {
   private aggregatePrices(sources: PriceSource[]): number {
     if (sources.length === 0) return 0;
 
-    // Sort by confidence descending
-    sources.sort((a, b) => b.confidence - a.confidence);
-
-    // If highest confidence is DEX, use it
-    if (sources[0].source.includes('dex') || sources[0].source.includes('uniswap')) {
-      return sources[0].price;
+    // Prioritize CoinGecko (most reliable for known tokens, faster than DEX)
+    const cgPrice = sources.find(s => s.source === 'coingecko');
+    if (cgPrice && cgPrice.price > 0) {
+      return cgPrice.price;
     }
 
-    // Otherwise take weighted average of top 2-3 sources
-    const topSources = sources.slice(0, 3);
-    const totalConfidence = topSources.reduce((sum, s) => sum + s.confidence, 0);
-    const weightedPrice = topSources.reduce((sum, s) => sum + (s.price * s.confidence), 0) / totalConfidence;
+    // Fall back to CoinMarketCap
+    const cmcPrice = sources.find(s => s.source === 'coinmarketcap');
+    if (cmcPrice && cmcPrice.price > 0) {
+      return cmcPrice.price;
+    }
 
-    return weightedPrice;
+    // Fall back to DEX for unknown tokens
+    const dexPrice = sources.find(s => s.source.includes('dex') || s.source.includes('uniswap'));
+    if (dexPrice && dexPrice.price > 0) {
+      return dexPrice.price;
+    }
+
+    // Take highest confidence if all above failed
+    sources.sort((a, b) => b.confidence - a.confidence);
+    return sources[0]?.price || 0;
   }
 
   private async tryGetPriceFromUniswapV3(contractAddress: string): Promise<number | null> {
