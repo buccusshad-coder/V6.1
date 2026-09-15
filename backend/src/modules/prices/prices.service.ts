@@ -76,8 +76,11 @@ export class PricesService {
       const platform = chainMap[chain.toLowerCase()] || 'ethereum';
 
       await this.throttleApiCall();
+      const apiKey = process.env.COINGECKO_API_KEY;
+      const keyParam = apiKey ? `&x_cg_pro_api_key=${apiKey}` : '';
+
       const response = await axios.get(
-        `${this.COINGECKO_API}/simple/token_price/${platform}?contract_addresses=${contractAddress}&vs_currencies=usd&include_market_cap=true&include_24hr_vol=true&include_24hr_change=true`,
+        `${this.COINGECKO_API}/simple/token_price/${platform}?contract_addresses=${contractAddress}&vs_currencies=usd&include_market_cap=true&include_24hr_vol=true&include_24hr_change=true${keyParam}`,
         { timeout: 5000 }
       );
 
