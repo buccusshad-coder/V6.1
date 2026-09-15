@@ -7,7 +7,7 @@ export class PricesService {
   private priceCache = new Map<string, any>();
   private cacheExpiry = 600000; // 10 minutes (longer cache = fewer API calls)
   private lastApiCall = 0;
-  private minDelayBetweenCalls = 100; // 100ms between calls
+  private minDelayBetweenCalls = 500; // 500ms between CoinGecko calls (free tier limit)
 
   /**
    * Get price by contract address (more reliable for obscure tokens)
