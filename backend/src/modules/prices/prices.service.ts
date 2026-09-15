@@ -5,7 +5,9 @@ import axios from 'axios';
 export class PricesService {
   private readonly COINGECKO_API = 'https://api.coingecko.com/api/v3';
   private priceCache = new Map<string, any>();
-  private cacheExpiry = 60000; // 1 minute
+  private cacheExpiry = 600000; // 10 minutes (longer cache = fewer API calls)
+  private lastApiCall = 0;
+  private minDelayBetweenCalls = 100; // 100ms between calls
 
   /**
    * Get price by contract address (more reliable for obscure tokens)
@@ -71,6 +73,7 @@ export class PricesService {
       };
       const platform = chainMap[chain.toLowerCase()] || 'ethereum';
 
+      await this.throttleApiCall();
       const response = await axios.get(
         `${this.COINGECKO_API}/simple/token_price/${platform}?contract_addresses=${contractAddress}&vs_currencies=usd&include_market_cap=true&include_24hr_vol=true&include_24hr_change=true`,
         { timeout: 5000 }
@@ -191,6 +194,15 @@ export class PricesService {
     }
   }
 
+  private async throttleApiCall() {
+    const now = Date.now();
+    const timeSinceLastCall = now - this.lastApiCall;
+    if (timeSinceLastCall < this.minDelayBetweenCalls) {
+      await new Promise(resolve => setTimeout(resolve, this.minDelayBetweenCalls - timeSinceLastCall));
+    }
+    this.lastApiCall = Date.now();
+  }
+
   async getLatestPrice(symbol: string) {
     const cached = this.priceCache.get(symbol);
     if (cached && Date.now() - cached.fetchedAt < this.cacheExpiry) {
@@ -198,6 +210,7 @@ export class PricesService {
     }
 
     try {
+      await this.throttleApiCall();
       const response = await axios.get(
         `${this.COINGECKO_API}/simple/price?ids=${symbol}&vs_currencies=usd&include_market_cap=true&include_24hr_vol=true&include_24hr_change=true`,
         { timeout: 5000 }
