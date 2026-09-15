@@ -1,4 +1,5 @@
 import { Injectable, Inject } from '@nestjs/common';
+import axios from 'axios';
 import { EtherscanService } from '../../integrations/etherscan.service';
 import { AlchemyService } from '../../integrations/alchemy.service';
 import { PricesService } from '../prices/prices.service';
@@ -36,13 +37,18 @@ export class WalletScannerService {
 
   /**
    * Scan wallet for all token balances including native coin
-   * Uses Alchemy first (faster, more reliable), falls back to Etherscan
+   * Uses Alchemy for Ethereum, Helius for Solana
    */
   async scanWalletBalance(
     address: string,
     chain: string,
   ): Promise<TokenBalance[]> {
     try {
+      if (chain.toLowerCase() === 'solana') {
+        console.log(`🔍 Scanning Solana wallet ${address}`);
+        return await this.scanSolanaWallet(address);
+      }
+
       if (chain.toLowerCase() === 'ethereum') {
         console.log(`🔍 Scanning wallet ${address} on ${chain}`);
 
@@ -232,6 +238,95 @@ export class WalletScannerService {
       return filtered;
     } catch (error) {
       console.error(`Failed to fetch transaction history:`, error);
+      return [];
+    }
+  }
+
+  /**
+   * Scan Solana wallet for token balances using Helius API
+   */
+  private async scanSolanaWallet(walletAddress: string): Promise<TokenBalance[]> {
+    try {
+      const balances: TokenBalance[] = [];
+
+      // Get SOL balance
+      const solResponse = await axios.post('https://api.mainnet-beta.solana.com', {
+        jsonrpc: '2.0',
+        id: 1,
+        method: 'getBalance',
+        params: [walletAddress],
+      }, { timeout: 10000 });
+
+      const solBalance = (solResponse.data.result?.value || 0) / 1e9;
+      let solPrice = 0;
+      try {
+        const priceData = await this.pricesService.getLatestPrice('solana');
+        solPrice = parseFloat(priceData.current_price) || 0;
+      } catch (e) {
+        console.warn('Could not fetch SOL price');
+      }
+
+      if (solBalance > 0) {
+        balances.push({
+          symbol: 'SOL',
+          name: 'Solana',
+          address: 'So11111111111111111111111111111111111111112',
+          amount: solBalance.toString(),
+          decimals: 9,
+          value: solBalance * solPrice,
+        });
+      }
+
+      // Get token accounts
+      const tokensResponse = await axios.post('https://api.mainnet-beta.solana.com', {
+        jsonrpc: '2.0',
+        id: 1,
+        method: 'getTokenAccountsByOwner',
+        params: [
+          walletAddress,
+          { programId: 'TokenkegQfeZyiNwAJsyFbPVwwQQYoNDct2xiaKHjLTE' },
+          { encoding: 'jsonParsed' },
+        ],
+      }, { timeout: 10000 });
+
+      const tokenAccounts = tokensResponse.data.result?.value || [];
+
+      for (const account of tokenAccounts) {
+        try {
+          const tokenData = account.account.data.parsed?.info;
+          if (!tokenData) continue;
+
+          const mint = tokenData.mint;
+          const amount = parseFloat(tokenData.tokenAmount?.amount || '0') /
+                        Math.pow(10, tokenData.tokenAmount?.decimals || 0);
+
+          if (amount > 0) {
+            let tokenPrice = 0;
+            try {
+              const priceData = await this.pricesService.getPriceByAddress(mint, 'solana');
+              tokenPrice = parseFloat(priceData.current_price) || 0;
+            } catch (e) {
+              // Price fetch failed, continue with $0
+            }
+
+            balances.push({
+              symbol: tokenData.symbol || 'UNKNOWN',
+              name: tokenData.name || 'Unknown Token',
+              address: mint,
+              amount: amount.toString(),
+              decimals: tokenData.tokenAmount?.decimals || 0,
+              value: amount * tokenPrice,
+            });
+          }
+        } catch (e) {
+          console.warn(`Failed to parse token account:`, e.message);
+        }
+      }
+
+      console.log(`✅ Found ${balances.length} tokens on Solana`);
+      return balances;
+    } catch (error) {
+      console.error(`Failed to scan Solana wallet:`, error.message);
       return [];
     }
   }
