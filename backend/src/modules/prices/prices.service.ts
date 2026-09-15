@@ -33,7 +33,14 @@ export class PricesService {
         return cmcPrice;
       }
 
-      // Return cached or zero price
+      // Fallback to DEX for on-chain prices (1inch for Ethereum, Jupiter for Solana, etc)
+      const dexPrice = await this.tryGetPriceFromDex(contractAddress, chain);
+      if (dexPrice && dexPrice.price > 0) {
+        this.priceCache.set(cacheKey, dexPrice);
+        return dexPrice;
+      }
+
+      // Return zero price if all sources fail
       const priceData = cgPrice || cmcPrice || {
         address: contractAddress,
         price: 0,
@@ -126,6 +133,57 @@ export class PricesService {
           current_price: quote.price,
           source: 'coinmarketcap',
         };
+      }
+      return null;
+    } catch (error) {
+      return null;
+    }
+  }
+
+  private async tryGetPriceFromDex(contractAddress: string, chain: string = 'ethereum') {
+    try {
+      if (chain.toLowerCase() === 'ethereum') {
+        // Use 1inch API for Ethereum
+        const response = await axios.get(
+          `https://api.1inch.io/v5.0/1/quote?src=0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2&dst=${contractAddress}&amount=1000000000000000000`,
+          { timeout: 5000 }
+        );
+
+        if (response.data?.toTokenAmount) {
+          const price = parseFloat(response.data.toTokenAmount) / 1e18;
+          if (price > 0) {
+            return {
+              address: contractAddress,
+              price,
+              marketCap: 0,
+              volume24h: 0,
+              change24h: 0,
+              fetchedAt: Date.now(),
+              current_price: price,
+              source: 'dex-1inch',
+            };
+          }
+        }
+      } else if (chain.toLowerCase() === 'solana') {
+        // Use Jupiter API for Solana
+        const response = await axios.get(
+          `https://price.jup.ag/v4/price?ids=${contractAddress}`,
+          { timeout: 5000 }
+        );
+
+        const data = response.data?.data?.[contractAddress];
+        if (data?.price && data.price > 0) {
+          return {
+            address: contractAddress,
+            price: parseFloat(data.price),
+            marketCap: 0,
+            volume24h: 0,
+            change24h: 0,
+            fetchedAt: Date.now(),
+            current_price: parseFloat(data.price),
+            source: 'dex-jupiter',
+          };
+        }
       }
       return null;
     } catch (error) {
