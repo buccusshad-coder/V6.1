@@ -162,8 +162,9 @@ export class WalletScannerService {
 
     let nativePrice = 0;
     try {
-      const priceData = await this.pricesService.getLatestPrice('ETH');
+      const priceData = await this.pricesService.getLatestPrice('ethereum');
       nativePrice = parseFloat(priceData.current_price) || 0;
+      console.log(`💰 ETH price: $${nativePrice}`);
     } catch (e) {
       console.warn(`Could not fetch ETH price`);
     }
@@ -179,30 +180,29 @@ export class WalletScannerService {
       });
     }
 
-    // Process tokens - fetch prices by contract address (more reliable)
-    for (const token of alchemyTokens) {
-      const parsedBalance = this.alchemyService.parseDecimal(token.balance, token.decimals);
-
-      if (parsedBalance > 0) {
+    // Process tokens - fetch prices in parallel for speed
+    const pricePromises = alchemyTokens
+      .filter(token => this.alchemyService.parseDecimal(token.balance, token.decimals) > 0)
+      .map(async (token) => {
+        const parsedBalance = this.alchemyService.parseDecimal(token.balance, token.decimals);
         let tokenPrice = 0;
         try {
-          // Try by contract address first (works for all ERC-20s)
           const priceData = await this.pricesService.getPriceByAddress(token.contractAddress, chain);
           tokenPrice = parseFloat(priceData.current_price) || parseFloat(priceData.price) || 0;
         } catch (e) {
-          console.warn(`Could not fetch price for ${token.symbol} (${token.contractAddress})`);
+          // Silently continue, price defaults to 0
         }
-
-        balances.push({
+        return {
           symbol: token.symbol,
           name: token.name,
           address: token.contractAddress,
           amount: parsedBalance.toString(),
           decimals: token.decimals,
           value: parsedBalance * tokenPrice,
-        });
-      }
-    }
+        };
+      });
+
+    balances.push(...(await Promise.all(pricePromises)));
 
     console.log(`✅ Formatted ${balances.length} balances from ${source}`);
     return balances;
@@ -265,6 +265,7 @@ export class WalletScannerService {
       } catch (e) {
         console.warn('Could not fetch SOL price');
       }
+      console.log(`💰 SOL price: $${solPrice}`);
 
       if (solBalance > 0) {
         balances.push({
