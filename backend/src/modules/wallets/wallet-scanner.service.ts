@@ -188,14 +188,27 @@ export class WalletScannerService {
         let tokenPrice = 0;
 
         try {
-          // Try symbol-based lookup first (works for known tokens like BONK, PEPE, QNT)
-          const priceData = await this.pricesService.getLatestPrice(token.symbol.toLowerCase());
-          tokenPrice = parseFloat(priceData.current_price) || 0;
+          // Try contract address lookup first (most accurate for meme coins)
+          const priceData = await this.pricesService.getPriceByAddress(token.contractAddress, chain);
+          let price = parseFloat(priceData.current_price) || parseFloat(priceData.price) || 0;
+
+          // If we got a price, use it
+          if (price > 0) {
+            tokenPrice = price;
+          } else {
+            // Fall back to symbol-based lookup only if contract address failed
+            try {
+              const symbolData = await this.pricesService.getLatestPrice(token.symbol.toLowerCase());
+              tokenPrice = parseFloat(symbolData.current_price) || 0;
+            } catch (e2) {
+              // Price defaults to 0
+            }
+          }
         } catch (e) {
-          // Fall back to contract address lookup
+          // Fall back to symbol-based lookup
           try {
-            const priceData = await this.pricesService.getPriceByAddress(token.contractAddress, chain);
-            tokenPrice = parseFloat(priceData.current_price) || parseFloat(priceData.price) || 0;
+            const priceData = await this.pricesService.getLatestPrice(token.symbol.toLowerCase());
+            tokenPrice = parseFloat(priceData.current_price) || 0;
           } catch (e2) {
             // Price defaults to 0
           }
