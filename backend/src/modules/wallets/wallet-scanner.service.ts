@@ -268,10 +268,12 @@ export class WalletScannerService {
       const solBalance = (solResponse.data.result?.value || 0) / 1e9;
       let solPrice = 0;
       try {
-        const priceData = await this.pricesService.getLatestPrice('solana');
-        solPrice = parseFloat(priceData.current_price) || 0;
+        // Use DexScreener for SOL with mint address (most reliable for Solana)
+        const SOL_MINT = 'So11111111111111111111111111111111111111112';
+        const priceData = await this.pricesService.getPriceByAddress(SOL_MINT, 'solana');
+        solPrice = parseFloat(priceData.current_price || priceData.price) || 0;
       } catch (e) {
-        console.warn('Could not fetch SOL price');
+        console.warn('Could not fetch SOL price:', e.message);
       }
       console.log(`💰 SOL price: $${solPrice}`);
 

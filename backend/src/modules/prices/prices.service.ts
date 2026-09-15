@@ -16,12 +16,23 @@ export class PricesService {
   private lastApiCall = 0;
   private minDelayBetweenCalls = 200; // 200ms between API calls
 
-  // Whitelist of tokens with non-colliding symbols (real tokens, not meme coins)
+  // Whitelist of verified, real tokens (prevents symbol collision false matches)
   private readonly SYMBOL_WHITELIST = new Set([
-    'eth', 'usdc', 'usdt', 'dai', 'weth', 'wsol', 'sol', 'avax', 'matic', 'bnb',
+    // Stablecoins
+    'usdc', 'usdt', 'dai', 'busd', 'tusd', 'frax',
+    // Major chains
+    'eth', 'btc', 'sol', 'bnb', 'avax', 'matic', 'ftm', 'one',
+    // Wrapped tokens
+    'weth', 'wbtc', 'wsol', 'wmatic', 'wbnb',
+    // Major DEX/protocols
+    'uni', 'sushi', 'aave', 'curve', 'crv', 'comp', 'mkr', 'snx', 'yearn', 'yfi',
+    // Solana tokens
+    'bonk', 'samo', 'orca', 'ray', 'step', 'cope', 'srm', 'ftt', 'msol', 'ust',
+    // Real altcoins
+    'link', 'graph', 'grt', 'lpt', 'ark', 'ilv', 'gmx', 'ens',
+    // Vitalik holdings
     'near', 'inj', 'qnt', 'render', 'rndr', 'vita', 'joe', 'ondo', 'imx', 'virtual',
-    'degen', 'anime', 'banana', 'lcx', 'aster', 'toshi', 'blast', 'rekt',
-    'link', 'uni', 'aave', 'curve', 'crv', 'comp', 'mkr', 'snx', 'sushi'
+    'degen', 'anime', 'banana', 'lcx', 'aster', 'toshi', 'blast'
   ])
 
   /**
@@ -304,8 +315,11 @@ export class PricesService {
 
     try {
       await this.throttleApiCall();
+      const apiKey = process.env.COINGECKO_API_KEY;
+      const keyParam = apiKey ? `&x_cg_pro_api_key=${apiKey}` : '';
+
       const response = await axios.get(
-        `${this.COINGECKO_API}/simple/price?ids=${symbol}&vs_currencies=usd&include_market_cap=true&include_24hr_vol=true&include_24hr_change=true`,
+        `${this.COINGECKO_API}/simple/price?ids=${symbol}&vs_currencies=usd&include_market_cap=true&include_24hr_vol=true&include_24hr_change=true${keyParam}`,
         { timeout: 5000 }
       );
 
