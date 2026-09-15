@@ -291,38 +291,51 @@ export class WalletScannerService {
       }, { timeout: 10000 });
 
       const tokenAccounts = tokensResponse.data.result?.value || [];
+      console.log(`📊 Found ${tokenAccounts.length} SPL token accounts`);
 
-      for (const account of tokenAccounts) {
-        try {
-          const tokenData = account.account.data.parsed?.info;
-          if (!tokenData) continue;
+      // Fetch prices in parallel for speed
+      const tokenPromises = tokenAccounts
+        .map((account: any) => {
+          try {
+            const tokenData = account.account.data.parsed?.info;
+            if (!tokenData) return null;
 
-          const mint = tokenData.mint;
-          const amount = parseFloat(tokenData.tokenAmount?.amount || '0') /
-                        Math.pow(10, tokenData.tokenAmount?.decimals || 0);
+            const mint = tokenData.mint;
+            const amount = parseFloat(tokenData.tokenAmount?.amount || '0') /
+                          Math.pow(10, tokenData.tokenAmount?.decimals || 0);
 
-          if (amount > 0) {
-            let tokenPrice = 0;
-            try {
-              const priceData = await this.pricesService.getPriceByAddress(mint, 'solana');
-              tokenPrice = parseFloat(priceData.current_price) || 0;
-            } catch (e) {
-              // Price fetch failed, continue with $0
-            }
+            if (amount <= 0) return null;
 
-            balances.push({
-              symbol: tokenData.symbol || 'UNKNOWN',
-              name: tokenData.name || 'Unknown Token',
-              address: mint,
-              amount: amount.toString(),
-              decimals: tokenData.tokenAmount?.decimals || 0,
-              value: amount * tokenPrice,
-            });
+            return this.pricesService
+              .getPriceByAddress(mint, 'solana')
+              .then((priceData: any) => {
+                const tokenPrice = parseFloat(priceData.current_price) || 0;
+                return {
+                  symbol: tokenData.symbol || 'UNKNOWN',
+                  name: tokenData.name || 'Unknown Token',
+                  address: mint,
+                  amount: amount.toString(),
+                  decimals: tokenData.tokenAmount?.decimals || 0,
+                  value: amount * tokenPrice,
+                };
+              })
+              .catch(() => ({
+                symbol: tokenData.symbol || 'UNKNOWN',
+                name: tokenData.name || 'Unknown Token',
+                address: mint,
+                amount: amount.toString(),
+                decimals: tokenData.tokenAmount?.decimals || 0,
+                value: 0,
+              }));
+          } catch (e) {
+            console.warn(`Failed to parse token account:`, e.message);
+            return null;
           }
-        } catch (e) {
-          console.warn(`Failed to parse token account:`, e.message);
-        }
-      }
+        })
+        .filter((p: any) => p !== null);
+
+      const tokens = await Promise.all(tokenPromises);
+      balances.push(...tokens.filter((t: any) => t !== null));
 
       console.log(`✅ Found ${balances.length} tokens on Solana`);
       return balances;
