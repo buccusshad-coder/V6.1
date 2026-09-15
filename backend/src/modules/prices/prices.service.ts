@@ -19,20 +19,23 @@ export class PricesService {
   // Whitelist of verified, real tokens (prevents symbol collision false matches)
   private readonly SYMBOL_WHITELIST = new Set([
     // Stablecoins
-    'usdc', 'usdt', 'dai', 'busd', 'tusd', 'frax',
-    // Major chains
-    'eth', 'btc', 'sol', 'bnb', 'avax', 'matic', 'ftm', 'one',
+    'usdc', 'usdt', 'dai', 'busd', 'tusd', 'frax', 'usde',
+    // Major chains & Layer-2
+    'eth', 'ethereum', 'btc', 'bitcoin', 'sol', 'solana', 'bnb', 'avax', 'matic', 'polygon', 'pol',
+    'ftm', 'fantom', 'one', 'harmony', 'arbitrum', 'optimism', 'op', 'base',
     // Wrapped tokens
-    'weth', 'wbtc', 'wsol', 'wmatic', 'wbnb',
+    'weth', 'wbtc', 'wsol', 'wmatic', 'wbnb', 'wavax',
     // Major DEX/protocols
-    'uni', 'sushi', 'aave', 'curve', 'crv', 'comp', 'mkr', 'snx', 'yearn', 'yfi',
+    'uni', 'uniswap', 'sushi', 'aave', 'curve', 'crv', 'comp', 'compound', 'mkr', 'maker', 'snx', 'yearn', 'yfi',
+    // Lending/staking
+    'lido', 'steth', 'rpl', 'rocket', 'aura', 'cvx', 'convex',
     // Solana tokens
-    'bonk', 'samo', 'orca', 'ray', 'step', 'cope', 'srm', 'ftt', 'msol', 'ust',
-    // Real altcoins
-    'link', 'graph', 'grt', 'lpt', 'ark', 'ilv', 'gmx', 'ens',
+    'bonk', 'samo', 'orca', 'ray', 'step', 'cope', 'srm', 'ftt', 'msol', 'ust', 'raydium', 'jup', 'jupiter',
+    // Real altcoins & oracles
+    'link', 'chainlink', 'graph', 'grt', 'lpt', 'livepeer', 'ark', 'ilv', 'gmx', 'ens', 'ethername',
     // Vitalik holdings
-    'near', 'inj', 'qnt', 'render', 'rndr', 'vita', 'joe', 'ondo', 'imx', 'virtual',
-    'degen', 'anime', 'banana', 'lcx', 'aster', 'toshi', 'blast'
+    'near', 'inj', 'injective', 'qnt', 'quant', 'render', 'rndr', 'vita', 'joe', 'traderjoe',
+    'ondo', 'imx', 'immutable', 'virtual', 'degen', 'anime', 'banana', 'lcx', 'aster', 'toshi', 'blast'
   ])
 
   /**
@@ -70,16 +73,20 @@ export class PricesService {
         }
       }
 
-      // FALLBACK 3: SMART SYMBOL LOOKUP - Only for whitelisted tokens (prevents symbol collisions like WOLF)
-      if (tokenSymbol && this.SYMBOL_WHITELIST.has(tokenSymbol.toLowerCase())) {
-        try {
-          const symbolPrice = await this.getLatestPrice(tokenSymbol.toLowerCase());
-          if (symbolPrice && symbolPrice.current_price > 0) {
-            this.priceCache.set(cacheKey, symbolPrice);
-            return symbolPrice;
+      // FALLBACK 3: SYMBOL LOOKUP with whitelist (prevents symbol collisions)
+      if (tokenSymbol) {
+        const cleanSymbol = tokenSymbol.toLowerCase();
+        // Try whitelisted symbols first
+        if (this.SYMBOL_WHITELIST.has(cleanSymbol)) {
+          try {
+            const symbolPrice = await this.getLatestPrice(cleanSymbol);
+            if (symbolPrice && symbolPrice.current_price > 0) {
+              this.priceCache.set(cacheKey, symbolPrice);
+              return { ...symbolPrice, source: 'symbol-whitelist' };
+            }
+          } catch (e) {
+            console.warn(`Symbol lookup failed for whitelisted ${cleanSymbol}:`, e.message);
           }
-        } catch (e) {
-          // Fall through to zero price
         }
       }
 
