@@ -9,6 +9,7 @@ export class PricesService {
 
   /**
    * Get price by contract address (more reliable for obscure tokens)
+   * Tries CoinGecko first, then CoinMarketCap, then returns $0
    */
   async getPriceByAddress(contractAddress: string, chain: string = 'ethereum') {
     const cacheKey = `addr:${contractAddress}`;
@@ -18,7 +19,42 @@ export class PricesService {
     }
 
     try {
-      // Map chain names to CoinGecko platform IDs
+      // Try CoinGecko first
+      const cgPrice = await this.tryGetPriceFromCoinGecko(contractAddress, chain);
+      if (cgPrice && cgPrice.price > 0) {
+        this.priceCache.set(cacheKey, cgPrice);
+        return cgPrice;
+      }
+
+      // Fallback to CoinMarketCap for meme coins
+      const cmcPrice = await this.tryGetPriceFromCoinMarketCap(contractAddress);
+      if (cmcPrice && cmcPrice.price > 0) {
+        this.priceCache.set(cacheKey, cmcPrice);
+        return cmcPrice;
+      }
+
+      // Return cached or zero price
+      const priceData = cgPrice || cmcPrice || {
+        address: contractAddress,
+        price: 0,
+        current_price: 0,
+        fetchedAt: Date.now(),
+      };
+      this.priceCache.set(cacheKey, priceData);
+      return priceData;
+    } catch (error) {
+      console.warn(`⚠️  Failed to fetch price for address ${contractAddress}:`, error.message);
+      return {
+        address: contractAddress,
+        price: 0,
+        current_price: 0,
+        fetchedAt: Date.now(),
+      };
+    }
+  }
+
+  private async tryGetPriceFromCoinGecko(contractAddress: string, chain: string) {
+    try {
       const chainMap: Record<string, string> = {
         ethereum: 'ethereum',
         polygon: 'polygon',
@@ -34,26 +70,66 @@ export class PricesService {
       );
 
       const data = response.data[contractAddress.toLowerCase()] || {};
-      const priceData = {
+      if (!data.usd) return null;
+
+      return {
         address: contractAddress,
         price: data.usd || 0,
         marketCap: data.usd_market_cap || 0,
         volume24h: data.usd_24h_vol || 0,
         change24h: data.usd_24h_change || 0,
         fetchedAt: Date.now(),
-        current_price: data.usd || 0, // Alias for compatibility
+        current_price: data.usd || 0,
+        source: 'coingecko',
       };
-
-      this.priceCache.set(cacheKey, priceData);
-      return priceData;
     } catch (error) {
-      console.warn(`⚠️  Failed to fetch price for address ${contractAddress}:`, error.message);
-      return {
-        address: contractAddress,
-        price: 0,
-        current_price: 0,
-        fetchedAt: Date.now(),
-      };
+      return null;
+    }
+  }
+
+  private async tryGetPriceFromCoinMarketCap(contractAddress: string) {
+    try {
+      const cmcApiKey = process.env.COINMARKETCAP_API_KEY;
+      if (!cmcApiKey) return null;
+
+      const response = await axios.get(
+        `https://pro-api.coinmarketcap.com/v2/tools/price-conversion?amount=1&symbol=USD&convert=USD&address=${contractAddress}`,
+        {
+          headers: { 'X-CMC_PRO_API_KEY': cmcApiKey },
+          timeout: 5000,
+        }
+      );
+
+      // Try alternative CoinMarketCap endpoint for token lookup
+      const response2 = await axios.get(
+        `https://pro-api.coinmarketcap.com/v1/cryptocurrency/info?address=${contractAddress}`,
+        {
+          headers: { 'X-CMC_PRO_API_KEY': cmcApiKey },
+          timeout: 5000,
+        }
+      );
+
+      const data = response2.data?.data;
+      if (!data) return null;
+
+      // Get price from quotes if available
+      const tokenData = Object.values(data)[0] as any;
+      const quote = tokenData?.quote?.USD;
+      if (quote && quote.price) {
+        return {
+          address: contractAddress,
+          price: quote.price,
+          marketCap: quote.market_cap || 0,
+          volume24h: quote.volume_24h || 0,
+          change24h: quote.percent_change_24h || 0,
+          fetchedAt: Date.now(),
+          current_price: quote.price,
+          source: 'coinmarketcap',
+        };
+      }
+      return null;
+    } catch (error) {
+      return null;
     }
   }
 
