@@ -1,6 +1,8 @@
 import axios, { AxiosInstance, AxiosError } from 'axios';
 
-const API_URL = 'https://viewers-purpose-antonio-orange.trycloudflare.com/api';
+const API_URL = process.env.NODE_ENV === 'production'
+  ? 'https://viewers-purpose-antonio-orange.trycloudflare.com/api'
+  : 'http://localhost:3000/api';
 
 class ApiService {
   private api: AxiosInstance;
