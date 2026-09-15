@@ -47,11 +47,13 @@ export class PricesService {
         }
       }
 
-      // Try CoinGecko (reliable for major tokens)
+      // Try CoinGecko by contract address (reliable for major tokens)
       const cgPrice = await this.tryGetPriceFromCoinGecko(contractAddress, chain);
       if (cgPrice && cgPrice.price > 0) {
         priceSources.push({ source: 'coingecko', price: cgPrice.price, confidence: 0.8 });
       }
+
+      // Note: Symbol-based lookup happens in wallet scanner where we have token symbols
 
       // Try CoinMarketCap (backup)
       const cmcPrice = await this.tryGetPriceFromCoinMarketCap(contractAddress);

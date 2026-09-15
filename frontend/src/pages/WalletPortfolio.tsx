@@ -34,21 +34,20 @@ export default function WalletPortfolio() {
   const [error, setError] = useState('');
 
   useEffect(() => {
+    const fetchWallet = async () => {
+      try {
+        setLoading(true);
+        const response = await api.getWallet(id!);
+        setWallet(response.data);
+        setError('');
+      } catch (err: any) {
+        setError(err.response?.data?.message || 'Failed to load wallet');
+      } finally {
+        setLoading(false);
+      }
+    };
     if (id) fetchWallet();
   }, [id]);
-
-  const fetchWallet = async () => {
-    try {
-      setLoading(true);
-      const response = await api.getWallet(id!);
-      setWallet(response.data);
-      setError('');
-    } catch (err: any) {
-      setError(err.response?.data?.message || 'Failed to load wallet');
-    } finally {
-      setLoading(false);
-    }
-  };
 
   if (loading) return <div className="loading">Loading portfolio...</div>;
   if (error) return <div className="alert alert-error">{error}</div>;

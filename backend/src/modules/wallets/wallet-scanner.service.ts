@@ -186,12 +186,21 @@ export class WalletScannerService {
       .map(async (token) => {
         const parsedBalance = this.alchemyService.parseDecimal(token.balance, token.decimals);
         let tokenPrice = 0;
+
         try {
-          const priceData = await this.pricesService.getPriceByAddress(token.contractAddress, chain);
-          tokenPrice = parseFloat(priceData.current_price) || parseFloat(priceData.price) || 0;
+          // Try symbol-based lookup first (works for known tokens like BONK, PEPE, QNT)
+          const priceData = await this.pricesService.getLatestPrice(token.symbol.toLowerCase());
+          tokenPrice = parseFloat(priceData.current_price) || 0;
         } catch (e) {
-          // Silently continue, price defaults to 0
+          // Fall back to contract address lookup
+          try {
+            const priceData = await this.pricesService.getPriceByAddress(token.contractAddress, chain);
+            tokenPrice = parseFloat(priceData.current_price) || parseFloat(priceData.price) || 0;
+          } catch (e2) {
+            // Price defaults to 0
+          }
         }
+
         return {
           symbol: token.symbol,
           name: token.name,
