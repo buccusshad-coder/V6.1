@@ -196,25 +196,37 @@ export class PricesService {
         solana: 'solana',
       };
       const chainId = chainMap[chain.toLowerCase()] || 'ethereum';
+      const lowerAddr = contractAddress.toLowerCase();
 
-      const url = `${this.DEXSCREENER_API}/latest/dex/tokens/${chainId}/${contractAddress}`;
+      // Use proven endpoints from tracker-final: /tokens/v1/ for EVM, /latest/dex/tokens/ for Solana
+      const url = chain.toLowerCase() === 'solana'
+        ? `${this.DEXSCREENER_API}/latest/dex/tokens/${lowerAddr}`
+        : `${this.DEXSCREENER_API}/tokens/v1/${chainId}/${lowerAddr}`;
+
       const response = await axios.get(url, {
-        timeout: 5000,
+        timeout: 15000,
         headers: {
           'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
         }
       });
 
-      const pair = response.data?.pairs?.[0];
-      if (pair && pair.priceUsd && parseFloat(pair.priceUsd) > 0) {
-        const price = parseFloat(pair.priceUsd);
-        console.log(`💰 DexScreener ${contractAddress.substring(0,8)}: $${price}`);
-        return {
-          address: contractAddress,
-          price,
-          current_price: price,
-          fetchedAt: Date.now(),
-        };
+      // Handle both array and object responses (like tracker-final)
+      const pairs = Array.isArray(response.data) ? response.data : (response.data?.pairs || []);
+
+      if (pairs.length) {
+        const pair = pairs[0];
+        const price = parseFloat(pair?.priceUsd);
+
+        if (price && price > 0) {
+          return {
+            address: contractAddress,
+            price,
+            current_price: price,
+            symbol: pair.baseToken?.symbol,
+            name: pair.baseToken?.name,
+            fetchedAt: Date.now(),
+          };
+        }
       }
       return null;
     } catch (error) {
