@@ -35,15 +35,14 @@ export class PricesService {
         return { ...dexPrice, source: 'dexscreener', current_price: dexPrice.price };
       }
 
-      // FALLBACK: CoinGecko for major tokens not on DEX
+      // FALLBACK: CoinGecko for major tokens not on DEX (contract address only, no symbol collisions)
       const cgPrice = await this.tryGetPriceFromCoinGecko(contractAddress, chain);
       if (cgPrice && cgPrice.price > 0) {
         this.priceCache.set(cacheKey, cgPrice);
         return cgPrice;
       }
 
-
-      // Return zero price if all sources fail
+      // Return zero price if all sources fail - DO NOT use symbol fallback (causes symbol collisions like WOLF)
       const fallback = {
         address: contractAddress,
         price: 0,
@@ -166,7 +165,12 @@ export class PricesService {
       const chainId = chainMap[chain.toLowerCase()] || 'ethereum';
 
       const url = `${this.DEXSCREENER_API}/latest/dex/tokens/${chainId}/${contractAddress}`;
-      const response = await axios.get(url, { timeout: 5000 });
+      const response = await axios.get(url, {
+        timeout: 5000,
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+        }
+      });
 
       const pair = response.data?.pairs?.[0];
       if (pair && pair.priceUsd && parseFloat(pair.priceUsd) > 0) {
@@ -181,7 +185,6 @@ export class PricesService {
       }
       return null;
     } catch (error) {
-      console.log(`⚠️ DexScreener ${contractAddress.substring(0,8)}: ${error.message}`);
       return null;
     }
   }

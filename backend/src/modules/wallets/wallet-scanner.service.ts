@@ -188,29 +188,28 @@ export class WalletScannerService {
         let tokenPrice = 0;
 
         try {
-          // Try contract address lookup first (most accurate for meme coins)
+          // Try contract address lookup ONLY (most accurate for meme coins, prevents symbol collisions)
           const priceData = await this.pricesService.getPriceByAddress(token.contractAddress, chain);
-          let price = parseFloat(priceData.current_price) || parseFloat(priceData.price) || 0;
+          tokenPrice = parseFloat(priceData.current_price) || parseFloat(priceData.price) || 0;
 
-          // If we got a price, use it
-          if (price > 0) {
-            tokenPrice = price;
-          } else {
-            // Fall back to symbol-based lookup only if contract address failed
+          // Only use symbol fallback for major tokens to prevent WOLF collisions
+          if (tokenPrice === 0 && ['ETH', 'SOL', 'USDC', 'USDT', 'DAI', 'WETH', 'WSOL'].includes(token.symbol.toUpperCase())) {
             try {
               const symbolData = await this.pricesService.getLatestPrice(token.symbol.toLowerCase());
               tokenPrice = parseFloat(symbolData.current_price) || 0;
             } catch (e2) {
-              // Price defaults to 0
+              // Price stays 0
             }
           }
         } catch (e) {
-          // Fall back to symbol-based lookup
-          try {
-            const priceData = await this.pricesService.getLatestPrice(token.symbol.toLowerCase());
-            tokenPrice = parseFloat(priceData.current_price) || 0;
-          } catch (e2) {
-            // Price defaults to 0
+          // Contract address lookup failed - only try symbol for major tokens
+          if (['ETH', 'SOL', 'USDC', 'USDT', 'DAI', 'WETH', 'WSOL'].includes(token.symbol.toUpperCase())) {
+            try {
+              const priceData = await this.pricesService.getLatestPrice(token.symbol.toLowerCase());
+              tokenPrice = parseFloat(priceData.current_price) || 0;
+            } catch (e2) {
+              tokenPrice = 0;
+            }
           }
         }
 
