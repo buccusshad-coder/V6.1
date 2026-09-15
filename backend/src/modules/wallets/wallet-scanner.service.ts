@@ -288,20 +288,49 @@ export class WalletScannerService {
         });
       }
 
-      // Get token accounts
-      const tokensResponse = await axios.post('https://api.mainnet-beta.solana.com', {
-        jsonrpc: '2.0',
-        id: 1,
-        method: 'getTokenAccountsByOwner',
-        params: [
-          walletAddress,
-          { programId: 'TokenkegQfeZyiNwAJsyFbPVwwQQYoNDct2xiaKHjLTE' },
-          { encoding: 'jsonParsed' },
-        ],
-      }, { timeout: 10000 });
+      // Try multiple methods to discover tokens
+      let tokenAccounts = [];
 
-      const tokenAccounts = tokensResponse.data.result?.value || [];
-      console.log(`📊 Found ${tokenAccounts.length} SPL token accounts`);
+      // Method 1: Standard SPL token program (TokenKeg)
+      try {
+        const tokensResponse = await axios.post('https://api.mainnet-beta.solana.com', {
+          jsonrpc: '2.0',
+          id: 1,
+          method: 'getTokenAccountsByOwner',
+          params: [
+            walletAddress,
+            { programId: 'TokenkegQfeZyiNwAJsyFbPVwwQQYoNDct2xiaKHjLTE' },
+            { encoding: 'jsonParsed' },
+          ],
+        }, { timeout: 10000 });
+        tokenAccounts = tokensResponse.data.result?.value || [];
+        console.log(`📊 Method 1 (TokenKeg): Found ${tokenAccounts.length} tokens`);
+      } catch (e) {
+        console.warn('Method 1 failed:', e.message);
+      }
+
+      // Method 2: Token-2022 program (newer token standard)
+      if (tokenAccounts.length === 0) {
+        try {
+          const tokens2022Response = await axios.post('https://api.mainnet-beta.solana.com', {
+            jsonrpc: '2.0',
+            id: 1,
+            method: 'getTokenAccountsByOwner',
+            params: [
+              walletAddress,
+              { programId: 'TokenzQdBbjFD8pPKyvq7PwNMjJqkitiusiv5QNc4jt' }, // Token-2022
+              { encoding: 'jsonParsed' },
+            ],
+          }, { timeout: 10000 });
+          const token2022Accounts = tokens2022Response.data.result?.value || [];
+          if (token2022Accounts.length > 0) {
+            tokenAccounts = tokenAccounts.concat(token2022Accounts);
+            console.log(`📊 Method 2 (Token-2022): Found ${token2022Accounts.length} tokens`);
+          }
+        } catch (e) {
+          // Token-2022 often fails for wallets without these tokens
+        }
+      }
 
       // Fetch prices in parallel for speed
       const tokenPromises = tokenAccounts
