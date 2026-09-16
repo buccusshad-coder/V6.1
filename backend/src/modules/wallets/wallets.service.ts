@@ -27,9 +27,10 @@ export class WalletsService {
     // Auto-create EVM wallet if address is EVM format
     if (isEvmAddress) {
       const evmChains = ['ethereum', 'arbitrum', 'base', 'polygon', 'optimism'];
+      const evmName = createWalletDto.name.endsWith('(EVM)') ? createWalletDto.name : `${createWalletDto.name} (EVM)`;
       walletsToCreate.push({
         userId,
-        name: `${createWalletDto.name} (EVM)`,
+        name: evmName,
         address,
         chain: 'ethereum',
         chains: evmChains,
@@ -40,9 +41,10 @@ export class WalletsService {
 
     // Auto-create Solana wallet if address is Solana format
     if (isSolanaAddress) {
+      const solName = createWalletDto.name.endsWith('(SOL)') ? createWalletDto.name : `${createWalletDto.name} (SOL)`;
       walletsToCreate.push({
         userId,
-        name: `${createWalletDto.name} (SOL)`,
+        name: solName,
         address,
         chain: 'solana',
         chains: ['solana'],
