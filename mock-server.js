@@ -22,6 +22,47 @@ function httpsRequest(url, method = 'GET') {
   });
 }
 
+// Fetch token metadata from Alchemy
+async function getTokenMetadata(contractAddress) {
+  try {
+    const payload = JSON.stringify({
+      jsonrpc: '2.0',
+      id: 1,
+      method: 'alchemy_getTokenMetadata',
+      params: [contractAddress]
+    });
+
+    return new Promise((resolve, reject) => {
+      const options = {
+        hostname: 'eth-mainnet.g.alchemy.com',
+        path: `/v2/${ALCHEMY_API_KEY}`,
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Content-Length': payload.length }
+      };
+
+      const req = https.request(options, (res) => {
+        let data = '';
+        res.on('data', chunk => data += chunk);
+        res.on('end', () => {
+          try {
+            const result = JSON.parse(data);
+            resolve(result);
+          } catch (e) {
+            reject(e);
+          }
+        });
+      });
+
+      req.on('error', reject);
+      req.write(payload);
+      req.end();
+    });
+  } catch (err) {
+    console.error('Token metadata error:', err.message);
+    return null;
+  }
+}
+
 // Scan real blockchain data using Alchemy
 async function scanAlchemy(address) {
   try {
@@ -467,25 +508,33 @@ const server = http.createServer((req, res) => {
         }));
       } else {
         // Scan real EVM blockchain using Alchemy and Etherscan
-        scanAlchemy(wallet.address).then(result => {
+        scanAlchemy(wallet.address).then(async result => {
           console.log(`✅ Scanning ${wallet.address} for real blockchain data...`);
 
           // Try to extract token data from Alchemy response
           let holdings = [];
 
           if (result && result.result && result.result.tokenBalances) {
-            holdings = result.result.tokenBalances
+            const tokenPromises = result.result.tokenBalances
               .filter(t => t.tokenBalance !== '0')
               .slice(0, 10)
-              .map(t => ({
-                symbol: 'TOKEN',
-                name: 'Unknown Token',
-                amount: String(parseInt(t.tokenBalance) / 1e18),
-                decimals: 18,
-                value: Math.random() * 10000,
-                chain: 'ethereum',
-                address: t.contractAddress
-              }));
+              .map(async t => {
+                // Fetch metadata for this token
+                const metadata = await getTokenMetadata(t.contractAddress);
+                const metaResult = metadata && metadata.result ? metadata.result : {};
+
+                return {
+                  symbol: metaResult.symbol || 'TOKEN',
+                  name: metaResult.name || 'Unknown Token',
+                  amount: String(parseInt(t.tokenBalance) / Math.pow(10, metaResult.decimals || 18)),
+                  decimals: metaResult.decimals || 18,
+                  value: Math.random() * 10000,
+                  chain: 'ethereum',
+                  address: t.contractAddress
+                };
+              });
+
+            holdings = await Promise.all(tokenPromises);
           }
 
           // If no tokens found, use fallback mock data

@@ -17,6 +17,20 @@ interface AlchemyAssetResponse {
   blockHash: string;
 }
 
+// Common token contracts and their metadata
+const KNOWN_TOKENS: { [key: string]: { symbol: string; name: string; decimals: number } } = {
+  '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48': { symbol: 'USDC', name: 'USD Coin', decimals: 6 },
+  '0xdac17f958d2ee523a2206206994597c13d831ec7': { symbol: 'USDT', name: 'Tether', decimals: 6 },
+  '0x6b175474e89094c44da98b954eedeac495271d0f': { symbol: 'DAI', name: 'Dai Stablecoin', decimals: 18 },
+  '0xc02aaa39b223fe8d0a0e8e4f27ead9083c756cc2': { symbol: 'WETH', name: 'Wrapped Ether', decimals: 18 },
+  '0x2260fac5e5542a773aa44fbcff022053d649e78f': { symbol: 'WBTC', name: 'Wrapped Bitcoin', decimals: 8 },
+  '0x514910771af9ca656af840dff83e8264ecf986ca': { symbol: 'LINK', name: 'ChainLink Token', decimals: 18 },
+  '0x7fc66500c84a76ad7e9c93437e434122a1f9adf5': { symbol: 'AAVE', name: 'Aave Token', decimals: 18 },
+  '0x1f9840a85d5af5bf1d1762f925bdaddc4201f984': { symbol: 'UNI', name: 'Uniswap', decimals: 18 },
+  '0x0000000000085d4780b73119b8b580991dee8d52': { symbol: 'GUSD', name: 'Gemini Dollar', decimals: 2 },
+  '0x6b3595068778dd592e39a122f4f5a5cf09c90fe2': { symbol: 'SUSHI', name: 'SushiToken', decimals: 18 },
+};
+
 @Injectable()
 export class AlchemyService {
   private readonly apiKey = process.env.ALCHEMY_API_KEY || '';
@@ -94,6 +108,7 @@ export class AlchemyService {
 
   /**
    * Get token metadata (symbol, name, decimals)
+   * Falls back to known tokens database if Alchemy doesn't return metadata
    */
   private async getTokenMetadata(contractAddress: string): Promise<{
     symbol?: string;
@@ -112,7 +127,7 @@ export class AlchemyService {
         timeout: 10000,
       });
 
-      if (response.data.result) {
+      if (response.data.result && (response.data.result.symbol || response.data.result.name)) {
         return {
           symbol: response.data.result.symbol,
           name: response.data.result.name,
@@ -120,9 +135,23 @@ export class AlchemyService {
         };
       }
 
+      // Fallback to known tokens database
+      const normalizedAddress = contractAddress.toLowerCase();
+      if (KNOWN_TOKENS[normalizedAddress]) {
+        console.log(`📚 Using known token: ${KNOWN_TOKENS[normalizedAddress].symbol}`);
+        return KNOWN_TOKENS[normalizedAddress];
+      }
+
       return {};
     } catch (error) {
       console.warn(`⚠️  Could not fetch metadata for ${contractAddress}`);
+
+      // Fallback to known tokens database on error
+      const normalizedAddress = contractAddress.toLowerCase();
+      if (KNOWN_TOKENS[normalizedAddress]) {
+        return KNOWN_TOKENS[normalizedAddress];
+      }
+
       return {};
     }
   }
