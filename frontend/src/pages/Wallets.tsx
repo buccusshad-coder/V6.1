@@ -8,7 +8,8 @@ interface Wallet {
   id: string;
   name: string;
   address: string;
-  chain: string;
+  chain?: string; // primary for backwards compat
+  chains?: string[]; // new: multiple chains
   type: string;
   balance: number;
   createdAt: string;
@@ -23,7 +24,6 @@ export default function Wallets() {
   const [formData, setFormData] = useState({
     name: '',
     address: '',
-    chain: 'ethereum',
   });
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
@@ -57,8 +57,7 @@ export default function Wallets() {
         await api.createWallet(formData);
         setSuccess('Wallet added successfully');
       }
-      setFormData({ name: '', address: '', chain: 'ethereum' });
-      setShowForm(false);
+      setFormData({ name: '', address: '' });
       await fetchWallets();
     } catch (err: any) {
       setError(err.response?.data?.message || 'Failed to save wallet');
@@ -69,7 +68,6 @@ export default function Wallets() {
     setFormData({
       name: wallet.name,
       address: wallet.address,
-      chain: wallet.chain,
     });
     setEditing(wallet.id);
     setShowForm(true);
@@ -89,7 +87,7 @@ export default function Wallets() {
   const handleCancel = () => {
     setShowForm(false);
     setEditing(null);
-    setFormData({ name: '', address: '', chain: 'ethereum' });
+    setFormData({ name: '', address: '' });
     setError('');
   };
 
@@ -103,7 +101,6 @@ export default function Wallets() {
     }
   };
 
-  const CHAINS = ['ethereum', 'arbitrum', 'base', 'solana', 'polygon', 'optimism'];
   const CHAIN_COLORS: Record<string, string> = {
     ethereum: '#627eea',
     arbitrum: '#28a0f0',
@@ -157,17 +154,9 @@ export default function Wallets() {
             </div>
 
             <div className="form-group">
-              <label>Chain</label>
-              <select
-                value={formData.chain}
-                onChange={(e) => setFormData({ ...formData, chain: e.target.value })}
-              >
-                {CHAINS.map((chain) => (
-                  <option key={chain} value={chain}>
-                    {chain.charAt(0).toUpperCase() + chain.slice(1)}
-                  </option>
-                ))}
-              </select>
+              <p style={{ fontSize: '12px', color: '#666', marginTop: '-8px' }}>
+                💡 Detected automatically: EVM (0x...) creates all EVM chains, Solana address creates SOL wallet
+              </p>
             </div>
 
             <div className="form-actions">
@@ -182,6 +171,15 @@ export default function Wallets() {
         </div>
       )}
 
+      {/* Separate Add Wallet Box - ALWAYS VISIBLE */}
+      <div className="add-new-wallet-box" onClick={() => setShowForm(true)}>
+        <div className="add-wallet-content">
+          <div className="add-wallet-icon">+</div>
+          <h3>Add New Wallet</h3>
+          <p>Click to add a new wallet</p>
+        </div>
+      </div>
+
       {loading ? (
         <div className="loading">Loading wallets...</div>
       ) : wallets.length === 0 ? (
@@ -189,15 +187,25 @@ export default function Wallets() {
           <p>No wallets yet. Add one to get started!</p>
         </div>
       ) : (
-        <div className="wallets-grid">
-          {wallets.map((wallet) => (
+        <>
+          <div className="wallets-grid">
+            {/* Existing Wallets */}
+            {wallets.map((wallet) => (
             <div key={wallet.id} className="wallet-card">
               <div className="wallet-header-card">
                 <div>
                   <h3>{wallet.name}</h3>
-                  <p className="wallet-chain" style={{ color: CHAIN_COLORS[wallet.chain] }}>
-                    {wallet.chain.toUpperCase()}
-                  </p>
+                  <div className="wallet-chains">
+                    {(wallet.chains || [wallet.chain || 'ethereum']).map((chain) => (
+                      <span
+                        key={chain}
+                        className="chain-badge"
+                        style={{ backgroundColor: CHAIN_COLORS[chain || 'ethereum'], color: '#fff', marginRight: '4px' }}
+                      >
+                        {(chain || 'ethereum').toUpperCase()}
+                      </span>
+                    ))}
+                  </div>
                 </div>
                 <div className="wallet-actions">
                   <button className="btn-icon" onClick={() => handleEdit(wallet)} title="Edit">
@@ -236,9 +244,21 @@ export default function Wallets() {
               </div>
             </div>
           ))}
-        </div>
+          </div>
+        </>
       )}
       </div>
+
+      {/* Floating Action Button to add wallet */}
+      {wallets.length > 0 && (
+        <button
+          className="fab-add-wallet"
+          onClick={() => setShowForm(true)}
+          title="Add another wallet"
+        >
+          +
+        </button>
+      )}
     </>
   );
 }

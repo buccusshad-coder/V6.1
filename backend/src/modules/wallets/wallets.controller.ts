@@ -17,11 +17,28 @@ export class WalletsController {
   ) {}
 
   @Post()
-  async create(@Request() req, @Body() createWalletDto: CreateWalletDto) {
-    if (!createWalletDto.name || !createWalletDto.address || !createWalletDto.chain) {
-      throw new BadRequestException('Missing required fields: name, address, chain');
+  async create(@Request() req, @Body() body: any) {
+    console.log('📝 Wallet create request:', { name: body.name, address: body.address });
+
+    if (!body.name || !body.address) {
+      console.error('❌ Missing fields:', body);
+      throw new BadRequestException('Missing required fields: name, address');
     }
-    return await this.walletsService.create(req.user.userId, createWalletDto);
+
+    // Ensure chain has default to bypass validation
+    const createWalletDto = {
+      ...body,
+      chain: body.chain || 'ethereum',
+    };
+
+    try {
+      const result = await this.walletsService.create(req.user.userId, createWalletDto);
+      console.log('✅ Wallet created:', result);
+      return result;
+    } catch (error) {
+      console.error('❌ Error creating wallet:', error.message);
+      throw error;
+    }
   }
 
   @Get('performance')
@@ -49,8 +66,16 @@ export class WalletsController {
         throw new BadRequestException('Wallet not found');
       }
 
-      console.log(`📡 Fetching token balances for ${wallet.address} on ${wallet.chain}...`);
-      const holdings = await this.walletScannerService.scanWalletBalance(wallet.address, wallet.chain);
+      // Scan all chains in the wallet
+      const chains = wallet.chains || [wallet.chain] || ['ethereum'];
+      console.log(`📡 Scanning ${wallet.address} on ${chains.length} chain(s): ${chains.join(', ')}`);
+
+      // Scan all chains in parallel and merge results
+      const chainResults = await Promise.all(
+        chains.map(chain => this.walletScannerService.scanWalletBalance(wallet.address, chain))
+      );
+
+      const holdings = chainResults.flat();
 
       console.log(`✅ Found ${holdings.length} tokens`);
 

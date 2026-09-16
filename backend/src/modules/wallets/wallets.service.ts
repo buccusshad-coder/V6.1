@@ -18,27 +18,61 @@ export class WalletsService {
   ) {}
 
   async create(userId: string, createWalletDto: CreateWalletDto) {
-    const existingWallet = await this.walletsRepository.findOne({
-      where: {
-        userId,
-        address: createWalletDto.address,
-        chain: createWalletDto.chain,
-      },
-    });
+    const address = createWalletDto.address.trim();
+    const isEvmAddress = address.startsWith('0x') && address.length === 42;
+    const isSolanaAddress = !isEvmAddress && address.length >= 32;
 
-    if (existingWallet) {
-      throw new BadRequestException('Wallet already exists for this chain');
+    const walletsToCreate = [];
+
+    // Auto-create EVM wallet if address is EVM format
+    if (isEvmAddress) {
+      const evmChains = ['ethereum', 'arbitrum', 'base', 'polygon', 'optimism'];
+      walletsToCreate.push({
+        userId,
+        name: `${createWalletDto.name} (EVM)`,
+        address,
+        chain: 'ethereum',
+        chains: evmChains,
+        type: 'evm',
+        metadata: createWalletDto.metadata,
+      });
     }
 
-    const wallet = this.walletsRepository.create({
-      userId,
-      ...createWalletDto,
-      type: createWalletDto.type || 'evm',
-    });
+    // Auto-create Solana wallet if address is Solana format
+    if (isSolanaAddress) {
+      walletsToCreate.push({
+        userId,
+        name: `${createWalletDto.name} (SOL)`,
+        address,
+        chain: 'solana',
+        chains: ['solana'],
+        type: 'solana',
+        metadata: createWalletDto.metadata,
+      });
+    }
 
-    const savedWallet = await this.walletsRepository.save(wallet);
-    this.walletsGateway.broadcastWalletCreated(userId, savedWallet);
-    return savedWallet;
+    // If somehow neither format matched, create as EVM by default
+    if (walletsToCreate.length === 0) {
+      walletsToCreate.push({
+        userId,
+        name: createWalletDto.name,
+        address,
+        chain: createWalletDto.chain || 'ethereum',
+        chains: [createWalletDto.chain || 'ethereum'],
+        type: 'evm',
+        metadata: createWalletDto.metadata,
+      });
+    }
+
+    const savedWallets = [];
+    for (const walletData of walletsToCreate) {
+      const wallet = this.walletsRepository.create(walletData);
+      const saved = await this.walletsRepository.save(wallet);
+      savedWallets.push(saved);
+      this.walletsGateway.broadcastWalletCreated(userId, saved);
+    }
+
+    return savedWallets.length === 1 ? savedWallets[0] : savedWallets;
   }
 
   async findAll(userId: string) {

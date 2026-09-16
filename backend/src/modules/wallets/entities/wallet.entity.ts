@@ -19,8 +19,11 @@ export class Wallet {
   @Column()
   address: string;
 
-  @Column({ type: 'varchar', length: 50 })
-  chain: string; // ethereum, arbitrum, base, solana, etc.
+  @Column({ type: 'varchar', length: 50, default: 'ethereum' })
+  chain: string; // primary chain - auto-detected from address
+
+  @Column({ type: 'simple-array', nullable: true })
+  chains?: string[]; // support multiple chains - ethereum, arbitrum, base, solana, polygon, optimism
 
   @Column({ type: 'varchar', length: 20, default: 'evm' })
   type: string; // evm, solana, etc.

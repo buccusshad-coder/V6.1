@@ -1,4 +1,4 @@
-import { IsString, IsEthereumAddress, IsOptional, IsObject } from 'class-validator';
+import { IsString, IsOptional, IsObject } from 'class-validator';
 
 export class CreateWalletDto {
   @IsString()
@@ -7,12 +7,8 @@ export class CreateWalletDto {
   @IsString()
   address: string;
 
-  @IsString()
-  chain: string; // ethereum, arbitrum, base, solana
-
-  @IsString()
   @IsOptional()
-  type?: string; // evm, solana (defaults to evm)
+  chain?: string; // No validation - auto-detected by service
 
   @IsObject()
   @IsOptional()

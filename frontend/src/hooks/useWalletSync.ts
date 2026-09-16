@@ -1,13 +1,6 @@
 import { useEffect, useRef } from 'react';
 import io, { Socket } from 'socket.io-client';
 
-interface Wallet {
-  id: string;
-  name: string;
-  address: string;
-  chain: string;
-}
-
 export const useWalletSync = (userId: string, onWalletChange: (event: any) => void) => {
   const socketRef = useRef<Socket | null>(null);
 

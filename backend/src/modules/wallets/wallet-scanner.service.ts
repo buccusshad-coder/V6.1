@@ -11,6 +11,7 @@ export interface TokenBalance {
   amount: string;
   decimals: number;
   value: number;
+  chain?: string; // blockchain origin
 }
 
 interface TokenTransaction {
@@ -90,6 +91,7 @@ export class WalletScannerService {
           amount: parsedEthBalance.toString(),
           decimals: ethDecimals,
           value: parsedEthBalance * nativePrice,
+          chain,
         });
       }
 
@@ -112,6 +114,7 @@ export class WalletScannerService {
             amount: '0',
             decimals: parseInt(tx.tokenDecimal),
             value: 0,
+            chain,
           });
         }
 
@@ -177,6 +180,7 @@ export class WalletScannerService {
         amount: parsedEthBalance.toString(),
         decimals: 18,
         value: parsedEthBalance * nativePrice,
+        chain,
       });
     }
 
@@ -212,6 +216,7 @@ export class WalletScannerService {
           amount: parsedBalance.toString(),
           decimals: token.decimals,
           value: parsedBalance * tokenPrice,
+          chain,
         };
       });
 
@@ -290,6 +295,7 @@ export class WalletScannerService {
           amount: solBalance.toString(),
           decimals: 9,
           value: solBalance * solPrice,
+          chain: 'solana',
         });
       }
 
@@ -361,6 +367,7 @@ export class WalletScannerService {
                   amount: amount.toString(),
                   decimals: tokenData.tokenAmount?.decimals || 0,
                   value: amount * tokenPrice,
+                  chain: 'solana',
                 };
               })
               .catch(() => ({
@@ -370,6 +377,7 @@ export class WalletScannerService {
                 amount: amount.toString(),
                 decimals: tokenData.tokenAmount?.decimals || 0,
                 value: 0,
+                chain: 'solana',
               }));
           } catch (e) {
             console.warn(`Failed to parse token account:`, e.message);
