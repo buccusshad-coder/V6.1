@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import axios from 'axios';
+import { UniswapService } from '../../integrations/uniswap.service';
 
 interface PriceSource {
   source: string;
@@ -15,6 +16,8 @@ export class PricesService {
   private cacheExpiry = 300000; // 5 minutes (increased for rate limit protection)
   private lastApiCall = 0;
   private minDelayBetweenCalls = 500; // Increased to 500ms to avoid CoinGecko rate limits
+
+  constructor(private uniswapService: UniswapService) {}
 
   // Whitelist of verified, real tokens (prevents symbol collision false matches)
   private readonly SYMBOL_WHITELIST = new Set([
@@ -73,7 +76,27 @@ export class PricesService {
         }
       }
 
-      // FALLBACK 3: SYMBOL LOOKUP with whitelist (prevents symbol collisions)
+      // FALLBACK 3: Uniswap V3 subgraph (on-chain pricing for Ethereum tokens)
+      if (chain.toLowerCase() === 'ethereum') {
+        try {
+          const uniswapPrice = await this.uniswapService.getTokenPriceFromUniswap(contractAddress);
+          if (uniswapPrice && uniswapPrice > 0) {
+            const result = {
+              address: contractAddress,
+              price: uniswapPrice,
+              current_price: uniswapPrice,
+              source: 'uniswap-v3',
+              fetchedAt: Date.now(),
+            };
+            this.priceCache.set(cacheKey, result);
+            return result;
+          }
+        } catch (e) {
+          console.warn(`Uniswap price fetch failed for ${contractAddress}:`, e.message);
+        }
+      }
+
+      // FALLBACK 4: SYMBOL LOOKUP with whitelist (prevents symbol collisions)
       if (tokenSymbol) {
         const cleanSymbol = tokenSymbol.toLowerCase();
         // Try whitelisted symbols first
