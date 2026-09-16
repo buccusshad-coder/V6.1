@@ -230,6 +230,64 @@ const mockData = {
         price: 0.15,
         change24h: -5.2
       }
+    ],
+    // Alternative EVM holdings for different wallet
+    'scan-evm-alt': [
+      {
+        symbol: 'USDC',
+        name: 'USD Coin',
+        amount: '5000',
+        decimals: 6,
+        value: 5000,
+        chain: 'ethereum',
+        address: '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48',
+        price: 1.0,
+        change24h: 0.05
+      },
+      {
+        symbol: 'USDT',
+        name: 'Tether',
+        amount: '3000',
+        decimals: 6,
+        value: 3000,
+        chain: 'ethereum',
+        address: '0xdAC17F958D2ee523a2206206994597C13D831ec7',
+        price: 1.0,
+        change24h: 0.02
+      },
+      {
+        symbol: 'WETH',
+        name: 'Wrapped Ether',
+        amount: '1.5',
+        decimals: 18,
+        value: 3600,
+        chain: 'ethereum',
+        address: '0xC02aaA39b223FE8D0A0e8e4F27ead9083C756Cc2',
+        price: 2400,
+        change24h: 1.2
+      },
+      {
+        symbol: 'DAI',
+        name: 'Dai Stablecoin',
+        amount: '2000',
+        decimals: 18,
+        value: 2000,
+        chain: 'ethereum',
+        address: '0x6B175474E89094C44Da98b954EedeAC495271d0F',
+        price: 1.0,
+        change24h: -0.01
+      },
+      {
+        symbol: 'LINK',
+        name: 'Chainlink',
+        amount: '100',
+        decimals: 18,
+        value: 1500,
+        chain: 'ethereum',
+        address: '0x514910771AF9Ca656af840dff83E8264EcF986CA',
+        price: 15.0,
+        change24h: 3.5
+      }
     ]
   }
 };
@@ -324,10 +382,17 @@ const server = http.createServer((req, res) => {
     const wallet = mockData.wallets.find(w => w.id === id);
 
     if (wallet) {
-      // Return scanned holdings based on wallet type
-      const scannedHoldings = wallet.type === 'solana'
-        ? mockData.holdings['scan-solana']
-        : mockData.holdings['scan-evm'];
+      let scannedHoldings;
+
+      if (wallet.type === 'solana') {
+        scannedHoldings = mockData.holdings['scan-solana'];
+      } else {
+        // Return different EVM holdings based on wallet address hash
+        const addressHash = wallet.address.charCodeAt(0) + wallet.address.charCodeAt(10);
+        scannedHoldings = addressHash % 2 === 0
+          ? mockData.holdings['scan-evm']
+          : mockData.holdings['scan-evm-alt'];
+      }
 
       // Update wallet holdings with scanned data
       mockData.holdings[id] = scannedHoldings;
