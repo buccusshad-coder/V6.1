@@ -1,18 +1,11 @@
 import { Injectable } from '@nestjs/common';
-import { GraphQLClient, gql } from 'graphql-request';
+import axios from 'axios';
 
 @Injectable()
 export class UniswapService {
-  private client: GraphQLClient;
+  private readonly SUBGRAPH_URL = 'https://api.thegraph.com/subgraphs/name/uniswap/uniswap-v3';
   private readonly USDC = '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48'; // USDC on Ethereum
   private readonly WETH = '0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2'; // WETH on Ethereum
-
-  constructor() {
-    // Uniswap V3 Subgraph endpoint
-    this.client = new GraphQLClient(
-      'https://api.thegraph.com/subgraphs/name/uniswap/uniswap-v3'
-    );
-  }
 
   /**
    * Get token price from Uniswap V3 pools
@@ -20,9 +13,9 @@ export class UniswapService {
    */
   async getTokenPriceFromUniswap(tokenAddress: string): Promise<number | null> {
     try {
-      const query = gql`
-        query GetTokenPrice($token: String!) {
-          token(id: $token) {
+      const query = `
+        query {
+          token(id: "${tokenAddress.toLowerCase()}") {
             id
             symbol
             decimals
@@ -30,7 +23,7 @@ export class UniswapService {
           }
           pools(
             first: 5
-            where: { or: [{ token0: $token }, { token1: $token }] }
+            where: { or: [{ token0: "${tokenAddress.toLowerCase()}" }, { token1: "${tokenAddress.toLowerCase()}" }] }
             orderBy: liquidity
             orderDirection: desc
           ) {
@@ -52,9 +45,13 @@ export class UniswapService {
         }
       `;
 
-      const data: any = await this.client.request(query, {
-        token: tokenAddress.toLowerCase(),
-      });
+      const response = await axios.post(
+        this.SUBGRAPH_URL,
+        { query },
+        { timeout: 10000 }
+      );
+
+      const data = response.data?.data;
 
       // Use derivedETH if available (Uniswap's calculated ETH price)
       if (data.token?.derivedETH) {
@@ -134,7 +131,7 @@ export class UniswapService {
    */
   private async getETHPrice(): Promise<number> {
     try {
-      const query = gql`
+      const query = `
         query {
           bundle(id: "1") {
             ethPriceUSD
@@ -142,8 +139,14 @@ export class UniswapService {
         }
       `;
 
-      const data: any = await this.client.request(query);
-      return parseFloat(data.bundle.ethPriceUSD) || 2400;
+      const response = await axios.post(
+        this.SUBGRAPH_URL,
+        { query },
+        { timeout: 10000 }
+      );
+
+      const data = response.data?.data;
+      return parseFloat(data?.bundle?.ethPriceUSD) || 2400;
     } catch (error) {
       console.warn('Failed to get ETH price:', error.message);
       return 2400; // Fallback
