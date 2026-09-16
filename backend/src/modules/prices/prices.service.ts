@@ -60,14 +60,23 @@ export class PricesService {
         return { ...dexPrice, source: 'dexscreener', current_price: dexPrice.price };
       }
 
-      // FALLBACK 1: CoinGecko contract address lookup
+      // FALLBACK 1: CoinMarketCap (better coverage for obscure tokens)
+      if (chain.toLowerCase() === 'ethereum') {
+        const cmcPrice = await this.tryGetPriceFromCoinMarketCap(contractAddress);
+        if (cmcPrice && cmcPrice.price > 0) {
+          this.priceCache.set(cacheKey, cmcPrice);
+          return cmcPrice;
+        }
+      }
+
+      // FALLBACK 3: CoinGecko contract address lookup
       const cgPrice = await this.tryGetPriceFromCoinGecko(contractAddress, chain);
       if (cgPrice && cgPrice.price > 0) {
         this.priceCache.set(cacheKey, cgPrice);
         return cgPrice;
       }
 
-      // FALLBACK 2: 1inch DEX for Ethereum, Jupiter for Solana
+      // FALLBACK 4: 1inch DEX for Ethereum, Jupiter for Solana
       if (chain.toLowerCase() === 'ethereum' || chain.toLowerCase() === 'solana') {
         const dexPrice = await this.tryGetPriceFromDex(contractAddress, chain);
         if (dexPrice && dexPrice.price > 0) {
@@ -76,27 +85,7 @@ export class PricesService {
         }
       }
 
-      // FALLBACK 3: Uniswap V3 subgraph (on-chain pricing for Ethereum tokens)
-      if (chain.toLowerCase() === 'ethereum') {
-        try {
-          const uniswapPrice = await this.uniswapService.getTokenPriceFromUniswap(contractAddress);
-          if (uniswapPrice && uniswapPrice > 0) {
-            const result = {
-              address: contractAddress,
-              price: uniswapPrice,
-              current_price: uniswapPrice,
-              source: 'uniswap-v3',
-              fetchedAt: Date.now(),
-            };
-            this.priceCache.set(cacheKey, result);
-            return result;
-          }
-        } catch (e) {
-          console.warn(`Uniswap price fetch failed for ${contractAddress}:`, e.message);
-        }
-      }
-
-      // FALLBACK 4: SYMBOL LOOKUP with whitelist (prevents symbol collisions)
+      // FALLBACK 5: SYMBOL LOOKUP with whitelist (prevents symbol collisions)
       if (tokenSymbol) {
         const cleanSymbol = tokenSymbol.toLowerCase();
         // Try whitelisted symbols first
@@ -178,30 +167,47 @@ export class PricesService {
       const cmcApiKey = process.env.COINMARKETCAP_API_KEY;
       if (!cmcApiKey) return null;
 
+      await this.throttleApiCall();
+
+      // Try CoinMarketCap cryptocurrency lookup by contract address
       const response = await axios.get(
-        `https://pro-api.coinmarketcap.com/v2/tools/price-conversion?amount=1&symbol=USD&convert=USD&address=${contractAddress}`,
+        `https://pro-api.coinmarketcap.com/v1/cryptocurrency/info`,
         {
           headers: { 'X-CMC_PRO_API_KEY': cmcApiKey },
-          timeout: 5000,
+          params: {
+            address: contractAddress,
+            aux: 'urls,logo,description,official_links,social_links,market_cap_by_total_supply'
+          },
+          timeout: 8000,
         }
       );
 
-      // Try alternative CoinMarketCap endpoint for token lookup
-      const response2 = await axios.get(
-        `https://pro-api.coinmarketcap.com/v1/cryptocurrency/info?address=${contractAddress}`,
-        {
-          headers: { 'X-CMC_PRO_API_KEY': cmcApiKey },
-          timeout: 5000,
-        }
-      );
+      const data = response.data?.data;
+      if (!data || Object.keys(data).length === 0) return null;
 
-      const data = response2.data?.data;
-      if (!data) return null;
-
-      // Get price from quotes if available
+      // Get first token from response
       const tokenData = Object.values(data)[0] as any;
-      const quote = tokenData?.quote?.USD;
-      if (quote && quote.price) {
+      if (!tokenData?.id) return null;
+
+      // Now get price data for this token
+      const priceResponse = await axios.get(
+        `https://pro-api.coinmarketcap.com/v2/cryptocurrency/quotes/latest`,
+        {
+          headers: { 'X-CMC_PRO_API_KEY': cmcApiKey },
+          params: {
+            id: tokenData.id,
+            convert: 'USD'
+          },
+          timeout: 8000,
+        }
+      );
+
+      const priceData = priceResponse.data?.data?.[tokenData.id];
+      if (!priceData) return null;
+
+      const quote = priceData.quote?.USD;
+      if (quote?.price) {
+        console.log(`💰 CoinMarketCap price for ${contractAddress}: $${quote.price}`);
         return {
           address: contractAddress,
           price: quote.price,
@@ -215,6 +221,7 @@ export class PricesService {
       }
       return null;
     } catch (error) {
+      console.warn(`CoinMarketCap lookup failed for ${contractAddress}:`, error.message);
       return null;
     }
   }
