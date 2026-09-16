@@ -82,6 +82,8 @@ export default function Wallets() {
 
       setSuccess(`Wallets created successfully for ${username}`);
       setFormData({ username: '', solanaAddress: '', evmAddress: '' });
+      setShowForm(false);
+      setEditing(null);
       await fetchWallets();
     } catch (err: any) {
       setError(err.response?.data?.message || 'Failed to create wallets');
