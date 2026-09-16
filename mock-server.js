@@ -29,35 +29,67 @@ const mockData = {
       {
         symbol: 'ETH',
         name: 'Ethereum',
-        amount: '2.5',
+        amount: '1.5',
         decimals: 18,
-        value: 5000,
+        value: 3000,
         chain: 'ethereum'
       },
       {
-        symbol: 'USDC',
-        name: 'USD Coin',
-        amount: '25000',
-        decimals: 6,
-        value: 25000,
+        symbol: 'JOE',
+        name: 'Joe',
+        amount: '500',
+        decimals: 18,
+        value: 2500,
+        chain: 'arbitrum'
+      },
+      {
+        symbol: 'BONK',
+        name: 'Bonk',
+        amount: '100000',
+        decimals: 5,
+        value: 1000,
         chain: 'base'
       },
       {
-        symbol: 'ARB',
-        name: 'Arbitrum',
+        symbol: 'PNKSTR',
+        name: 'PinkStr',
         amount: '1000',
         decimals: 18,
-        value: 20000,
-        chain: 'arbitrum'
+        value: 500,
+        chain: 'polygon'
+      },
+      {
+        symbol: 'EIGEN',
+        name: 'Eigen',
+        amount: '100',
+        decimals: 18,
+        value: 3000,
+        chain: 'optimism'
       }
     ],
     '2': [
       {
         symbol: 'SOL',
         name: 'Solana',
-        amount: '100',
+        amount: '50',
         decimals: 9,
-        value: 25000,
+        value: 12500,
+        chain: 'solana'
+      },
+      {
+        symbol: 'USDC',
+        name: 'USD Coin (Solana)',
+        amount: '5000',
+        decimals: 6,
+        value: 5000,
+        chain: 'solana'
+      },
+      {
+        symbol: 'COPE',
+        name: 'Cope',
+        amount: '2000',
+        decimals: 6,
+        value: 200,
         chain: 'solana'
       }
     ],
