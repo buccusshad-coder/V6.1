@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import axios from 'axios';
-import { UniswapService } from '../../integrations/uniswap.service';
+import { DefilamaService } from '../../integrations/defilama.service';
 
 interface PriceSource {
   source: string;
@@ -17,7 +17,7 @@ export class PricesService {
   private lastApiCall = 0;
   private minDelayBetweenCalls = 500; // Increased to 500ms to avoid CoinGecko rate limits
 
-  constructor(private uniswapService: UniswapService) {}
+  constructor(private defilamaService: DefilamaService) {}
 
   // Whitelist of verified, real tokens (prevents symbol collision false matches)
   private readonly SYMBOL_WHITELIST = new Set([
@@ -60,7 +60,25 @@ export class PricesService {
         return { ...dexPrice, source: 'dexscreener', current_price: dexPrice.price };
       }
 
-      // FALLBACK 1: CoinMarketCap (better coverage for obscure tokens)
+      // FALLBACK 1: DefiLlama (free, good coverage for DeFi tokens)
+      try {
+        const defiPrice = await this.defilamaService.getTokenPrice(contractAddress, chain);
+        if (defiPrice && defiPrice > 0) {
+          const result = {
+            address: contractAddress,
+            price: defiPrice,
+            current_price: defiPrice,
+            source: 'defilama',
+            fetchedAt: Date.now(),
+          };
+          this.priceCache.set(cacheKey, result);
+          return result;
+        }
+      } catch (e) {
+        // Silent fail - DefiLlama might not have the token
+      }
+
+      // FALLBACK 3: CoinMarketCap (if CMC API key is valid)
       if (chain.toLowerCase() === 'ethereum') {
         const cmcPrice = await this.tryGetPriceFromCoinMarketCap(contractAddress);
         if (cmcPrice && cmcPrice.price > 0) {
@@ -69,14 +87,14 @@ export class PricesService {
         }
       }
 
-      // FALLBACK 3: CoinGecko contract address lookup
+      // FALLBACK 4: CoinGecko contract address lookup
       const cgPrice = await this.tryGetPriceFromCoinGecko(contractAddress, chain);
       if (cgPrice && cgPrice.price > 0) {
         this.priceCache.set(cacheKey, cgPrice);
         return cgPrice;
       }
 
-      // FALLBACK 4: 1inch DEX for Ethereum, Jupiter for Solana
+      // FALLBACK 5: 1inch DEX for Ethereum, Jupiter for Solana
       if (chain.toLowerCase() === 'ethereum' || chain.toLowerCase() === 'solana') {
         const dexPrice = await this.tryGetPriceFromDex(contractAddress, chain);
         if (dexPrice && dexPrice.price > 0) {
@@ -85,7 +103,7 @@ export class PricesService {
         }
       }
 
-      // FALLBACK 5: SYMBOL LOOKUP with whitelist (prevents symbol collisions)
+      // FALLBACK 6: SYMBOL LOOKUP with whitelist (prevents symbol collisions)
       if (tokenSymbol) {
         const cleanSymbol = tokenSymbol.toLowerCase();
         // Try whitelisted symbols first
