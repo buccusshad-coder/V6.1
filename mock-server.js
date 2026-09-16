@@ -105,6 +105,99 @@ const mockData = {
         value: 20000,
         chain: 'ethereum'
       }
+    ],
+    // Scanned real holdings data for EVM wallet
+    'scan-evm': [
+      {
+        symbol: 'ETH',
+        name: 'Ethereum',
+        amount: '0.000711345',
+        decimals: 18,
+        value: 1.71,
+        chain: 'ethereum',
+        price: 2407.29,
+        change24h: 0.37
+      },
+      {
+        symbol: 'JOE',
+        name: 'Joe Coin',
+        amount: '8293.34',
+        decimals: 18,
+        value: 45.64,
+        chain: 'ethereum',
+        address: '0x76e222b07C53D28b89b0bAc18602810Fc22B49A8',
+        price: 0.005503,
+        change24h: 5.53,
+        bridge: 'Wormhole'
+      },
+      {
+        symbol: 'Bonk',
+        name: 'Bonk',
+        amount: '14046387.50',
+        decimals: 6,
+        value: 36.38,
+        chain: 'ethereum',
+        address: '0x1151CB3d861920e07a38e03eEAd12C32178567F6',
+        price: 0.000003,
+        change24h: 0.15
+      },
+      {
+        symbol: 'PNKSTR',
+        name: 'PunkStrategy',
+        amount: '2260.52',
+        decimals: 18,
+        value: 16.60,
+        chain: 'ethereum',
+        address: '0xc50673EDb3A7b94E8CAD8a7d4E0cD68864E33eDF',
+        price: 0.007343,
+        change24h: 3.07
+      },
+      {
+        symbol: 'EIGEN',
+        name: 'Eigen',
+        amount: '62.87',
+        decimals: 18,
+        value: 11.97,
+        chain: 'ethereum',
+        address: '0xec53bF9167f50cDEB3Ae105f56099aaaB9061F83',
+        price: 0.190398,
+        change24h: 1.33
+      }
+    ],
+    // Scanned real holdings data for Solana wallet
+    'scan-solana': [
+      {
+        symbol: 'SOL',
+        name: 'Solana',
+        amount: '5.25',
+        decimals: 9,
+        value: 1050,
+        chain: 'solana',
+        price: 200,
+        change24h: 2.5
+      },
+      {
+        symbol: 'USDC',
+        name: 'USD Coin (Solana)',
+        amount: '2500',
+        decimals: 6,
+        value: 2500,
+        chain: 'solana',
+        address: 'EPjFWaLb3DiFVzFaxZucxDkH7lgA1DTJK9KpqUgS7zKu',
+        price: 1.0,
+        change24h: 0.1
+      },
+      {
+        symbol: 'COPE',
+        name: 'Cope',
+        amount: '1000',
+        decimals: 4,
+        value: 150,
+        chain: 'solana',
+        address: '8HGyAAB1yoM1ttS7pnqYRV34aak3xcN7WfDPjYuxV84j',
+        price: 0.15,
+        change24h: -5.2
+      }
     ]
   }
 };
@@ -196,8 +289,26 @@ const server = http.createServer((req, res) => {
 
   if (pathname.startsWith('/api/wallets/') && pathname.endsWith('/scan') && req.method === 'POST') {
     const id = pathname.split('/')[3];
-    res.writeHead(200);
-    res.end(JSON.stringify({ message: 'Scan started' }));
+    const wallet = mockData.wallets.find(w => w.id === id);
+
+    if (wallet) {
+      // Return scanned holdings based on wallet type
+      const scannedHoldings = wallet.type === 'solana'
+        ? mockData.holdings['scan-solana']
+        : mockData.holdings['scan-evm'];
+
+      // Update wallet holdings with scanned data
+      mockData.holdings[id] = scannedHoldings;
+
+      res.writeHead(200);
+      res.end(JSON.stringify({
+        message: 'Scan completed',
+        wallet: { ...wallet, metadata: { holdings: scannedHoldings } }
+      }));
+    } else {
+      res.writeHead(404);
+      res.end(JSON.stringify({ error: 'Wallet not found' }));
+    }
     return;
   }
 
