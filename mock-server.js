@@ -60,6 +60,51 @@ const mockData = {
         value: 25000,
         chain: 'solana'
       }
+    ],
+    // For dynamically created wallets - return wallet-type appropriate data
+    'default-solana': [
+      {
+        symbol: 'SOL',
+        name: 'Solana',
+        amount: '50',
+        decimals: 9,
+        value: 12500,
+        chain: 'solana'
+      },
+      {
+        symbol: 'USDC',
+        name: 'USD Coin (Solana)',
+        amount: '5000',
+        decimals: 6,
+        value: 5000,
+        chain: 'solana'
+      }
+    ],
+    'default-evm': [
+      {
+        symbol: 'ETH',
+        name: 'Ethereum',
+        amount: '1.5',
+        decimals: 18,
+        value: 3000,
+        chain: 'ethereum'
+      },
+      {
+        symbol: 'USDC',
+        name: 'USD Coin',
+        amount: '10000',
+        decimals: 6,
+        value: 10000,
+        chain: 'base'
+      },
+      {
+        symbol: 'WBTC',
+        name: 'Wrapped Bitcoin',
+        amount: '0.5',
+        decimals: 8,
+        value: 20000,
+        chain: 'ethereum'
+      }
     ]
   }
 };
@@ -132,8 +177,16 @@ const server = http.createServer((req, res) => {
     const id = pathname.split('/')[3];
     const wallet = mockData.wallets.find(w => w.id === id);
     if (wallet) {
+      // Return wallet-type appropriate holdings
+      let holdings = mockData.holdings[id] || [];
+      if (holdings.length === 0) {
+        // For dynamically created wallets, return type-appropriate data
+        holdings = wallet.type === 'solana'
+          ? mockData.holdings['default-solana']
+          : mockData.holdings['default-evm'];
+      }
       res.writeHead(200);
-      res.end(JSON.stringify({ ...wallet, metadata: { holdings: mockData.holdings[id] || [] } }));
+      res.end(JSON.stringify({ ...wallet, metadata: { holdings } }));
     } else {
       res.writeHead(404);
       res.end(JSON.stringify({ error: 'Wallet not found' }));
