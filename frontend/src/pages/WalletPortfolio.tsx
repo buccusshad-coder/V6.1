@@ -32,6 +32,7 @@ export default function WalletPortfolio() {
   const [wallet, setWallet] = useState<WalletDetails | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [hideSmallTokens, setHideSmallTokens] = useState(true);
 
   useEffect(() => {
     const fetchWallet = async () => {
@@ -55,7 +56,13 @@ export default function WalletPortfolio() {
 
   const holdings = wallet.metadata?.holdings || [];
   const totalValue = parseFloat(String(wallet.metadata?.totalValue || wallet.balance || 0));
-  const sortedTokens = [...holdings].sort((a, b) => b.value - a.value);
+
+  // Filter out small tokens if enabled
+  const filteredTokens = hideSmallTokens
+    ? holdings.filter(t => t.value >= 1)
+    : holdings;
+
+  const sortedTokens = [...filteredTokens].sort((a, b) => b.value - a.value);
 
   return (
     <>
@@ -84,7 +91,17 @@ export default function WalletPortfolio() {
         </div>
 
         <div className="holdings-section">
-          <h2>Holdings</h2>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+            <h2>Holdings</h2>
+            <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
+              <input
+                type="checkbox"
+                checked={hideSmallTokens}
+                onChange={(e) => setHideSmallTokens(e.target.checked)}
+              />
+              Hide tokens &lt; $1 (scam filter)
+            </label>
+          </div>
           {sortedTokens.length === 0 ? (
             <p className="empty">No tokens found in this wallet</p>
           ) : (
