@@ -6,6 +6,7 @@ import '../styles/Wallets.css';
 
 interface Wallet {
   id: string;
+  username?: string;
   name: string;
   address: string;
   chain?: string; // primary for backwards compat
@@ -22,6 +23,7 @@ export default function Wallets() {
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState<string | null>(null);
   const [formData, setFormData] = useState({
+    username: '',
     name: '',
     address: '',
   });
@@ -57,7 +59,7 @@ export default function Wallets() {
         await api.createWallet(formData);
         setSuccess('Wallet added successfully');
       }
-      setFormData({ name: '', address: '' });
+      setFormData({ username: '', name: '', address: '' });
       await fetchWallets();
     } catch (err: any) {
       setError(err.response?.data?.message || 'Failed to save wallet');
@@ -66,6 +68,7 @@ export default function Wallets() {
 
   const handleEdit = (wallet: Wallet) => {
     setFormData({
+      username: wallet.username || '',
       name: wallet.name,
       address: wallet.address,
     });
@@ -87,7 +90,7 @@ export default function Wallets() {
   const handleCancel = () => {
     setShowForm(false);
     setEditing(null);
-    setFormData({ name: '', address: '' });
+    setFormData({ username: '', name: '', address: '' });
     setError('');
   };
 
@@ -131,6 +134,16 @@ export default function Wallets() {
         <div className="wallet-form">
           <h2>{editing ? 'Edit Wallet' : 'Add New Wallet'}</h2>
           <form onSubmit={handleAddWallet}>
+            <div className="form-group">
+              <label>Username</label>
+              <input
+                type="text"
+                placeholder="e.g., john_doe"
+                value={formData.username}
+                onChange={(e) => setFormData({ ...formData, username: e.target.value })}
+              />
+            </div>
+
             <div className="form-group">
               <label>Wallet Name</label>
               <input
