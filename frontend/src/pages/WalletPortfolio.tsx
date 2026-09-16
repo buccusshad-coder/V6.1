@@ -57,7 +57,7 @@ export default function WalletPortfolio() {
   if (!wallet) return <div className="alert alert-error">Wallet not found</div>;
 
   const holdings = wallet.metadata?.holdings || [];
-  const totalValue = parseFloat(String(wallet.metadata?.totalValue || wallet.balance || 0));
+  const totalValue = holdings.reduce((sum, token) => sum + (token.value || 0), 0);
 
   // Filter out small tokens if enabled
   const filteredTokens = hideSmallTokens
