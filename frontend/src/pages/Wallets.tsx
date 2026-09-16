@@ -84,7 +84,8 @@ export default function Wallets() {
       setFormData({ username: '', solanaAddress: '', evmAddress: '' });
       setShowForm(false);
       setEditing(null);
-      await fetchWallets();
+      // Refresh page to ensure all wallets display correctly with updated data
+      setTimeout(() => window.location.reload(), 500);
     } catch (err: any) {
       setError(err.response?.data?.message || 'Failed to create wallets');
     }
