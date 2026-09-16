@@ -387,11 +387,11 @@ const server = http.createServer((req, res) => {
       if (wallet.type === 'solana') {
         scannedHoldings = mockData.holdings['scan-solana'];
       } else {
-        // Return different EVM holdings based on wallet address hash
-        const addressHash = wallet.address.charCodeAt(0) + wallet.address.charCodeAt(10);
+        // Return different EVM holdings based on wallet address length and middle character
+        const addressHash = wallet.address.length + (wallet.address.charCodeAt(Math.floor(wallet.address.length / 2)) || 0);
         scannedHoldings = addressHash % 2 === 0
-          ? mockData.holdings['scan-evm']
-          : mockData.holdings['scan-evm-alt'];
+          ? mockData.holdings['scan-evm-alt']
+          : mockData.holdings['scan-evm'];
       }
 
       // Update wallet holdings with scanned data
