@@ -24,8 +24,8 @@ export default function Wallets() {
   const [editing, setEditing] = useState<string | null>(null);
   const [formData, setFormData] = useState({
     username: '',
-    name: '',
-    address: '',
+    solanaAddress: '',
+    evmAddress: '',
   });
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
@@ -51,26 +51,49 @@ export default function Wallets() {
     e.preventDefault();
     try {
       setError('');
-      if (editing) {
-        await api.updateWallet(editing, formData);
-        setSuccess('Wallet updated successfully');
-        setEditing(null);
-      } else {
-        await api.createWallet(formData);
-        setSuccess('Wallet added successfully');
+      const { username, solanaAddress, evmAddress } = formData;
+
+      if (!username) {
+        setError('Username is required');
+        return;
       }
-      setFormData({ username: '', name: '', address: '' });
+      if (!solanaAddress && !evmAddress) {
+        setError('At least one wallet address is required (Solana or EVM)');
+        return;
+      }
+
+      // Create Solana wallet if address provided
+      if (solanaAddress) {
+        await api.createWallet({
+          username,
+          name: `${username} (SOL)`,
+          address: solanaAddress,
+        });
+      }
+
+      // Create EVM wallet if address provided
+      if (evmAddress) {
+        await api.createWallet({
+          username,
+          name: `${username} (EVM)`,
+          address: evmAddress,
+        });
+      }
+
+      setSuccess(`Wallets created successfully for ${username}`);
+      setFormData({ username: '', solanaAddress: '', evmAddress: '' });
       await fetchWallets();
     } catch (err: any) {
-      setError(err.response?.data?.message || 'Failed to save wallet');
+      setError(err.response?.data?.message || 'Failed to create wallets');
     }
   };
 
   const handleEdit = (wallet: Wallet) => {
+    const isSolana = wallet.type === 'solana';
     setFormData({
       username: wallet.username || '',
-      name: wallet.name,
-      address: wallet.address,
+      solanaAddress: isSolana ? wallet.address : '',
+      evmAddress: !isSolana ? wallet.address : '',
     });
     setEditing(wallet.id);
     setShowForm(true);
@@ -90,7 +113,7 @@ export default function Wallets() {
   const handleCancel = () => {
     setShowForm(false);
     setEditing(null);
-    setFormData({ username: '', name: '', address: '' });
+    setFormData({ username: '', solanaAddress: '', evmAddress: '' });
     setError('');
   };
 
@@ -141,40 +164,39 @@ export default function Wallets() {
                 placeholder="e.g., john_doe"
                 value={formData.username}
                 onChange={(e) => setFormData({ ...formData, username: e.target.value })}
-              />
-            </div>
-
-            <div className="form-group">
-              <label>Wallet Name</label>
-              <input
-                type="text"
-                placeholder="e.g., My Ethereum Wallet"
-                value={formData.name}
-                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                 required
               />
             </div>
 
             <div className="form-group">
-              <label>Wallet Address</label>
+              <label>Solana Wallet Address (Optional)</label>
               <input
                 type="text"
-                placeholder="0x... (Ethereum) or Solana address"
-                value={formData.address}
-                onChange={(e) => setFormData({ ...formData, address: e.target.value })}
-                required
+                placeholder="e.g., 3J98t1WnwEjsnkYXLB1QNLsNgPDMzcBkSfh8HWqGrJwN"
+                value={formData.solanaAddress}
+                onChange={(e) => setFormData({ ...formData, solanaAddress: e.target.value })}
+              />
+            </div>
+
+            <div className="form-group">
+              <label>EVM Wallet Address (Optional)</label>
+              <input
+                type="text"
+                placeholder="e.g., 0x742d35Cc6634C0532925a3b844Bc369e4471243D"
+                value={formData.evmAddress}
+                onChange={(e) => setFormData({ ...formData, evmAddress: e.target.value })}
               />
             </div>
 
             <div className="form-group">
               <p style={{ fontSize: '12px', color: '#666', marginTop: '-8px' }}>
-                💡 Detected automatically: EVM (0x...) creates all EVM chains, Solana address creates SOL wallet
+                💡 Create one or both wallet types. EVM automatically creates wallets for ethereum, arbitrum, base, polygon, optimism
               </p>
             </div>
 
             <div className="form-actions">
               <button type="submit" className="btn-primary">
-                {editing ? 'Update' : 'Add'} Wallet
+                {editing ? 'Update' : 'Create'} Wallets
               </button>
               <button type="button" className="btn-secondary" onClick={handleCancel}>
                 Cancel
