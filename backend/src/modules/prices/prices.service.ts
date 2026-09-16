@@ -12,9 +12,9 @@ export class PricesService {
   private readonly DEXSCREENER_API = 'https://api.dexscreener.com';
   private readonly COINGECKO_API = 'https://api.coingecko.com/api/v3';
   private priceCache = new Map<string, any>();
-  private cacheExpiry = 180000; // 3 minutes (DexScreener recommendation)
+  private cacheExpiry = 300000; // 5 minutes (increased for rate limit protection)
   private lastApiCall = 0;
-  private minDelayBetweenCalls = 200; // 200ms between API calls
+  private minDelayBetweenCalls = 500; // Increased to 500ms to avoid CoinGecko rate limits
 
   // Whitelist of verified, real tokens (prevents symbol collision false matches)
   private readonly SYMBOL_WHITELIST = new Set([

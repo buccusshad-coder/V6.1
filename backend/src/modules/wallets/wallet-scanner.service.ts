@@ -195,8 +195,13 @@ export class WalletScannerService {
             token.symbol  // Pass symbol - getPriceByAddress will use whitelist for fallback
           );
           tokenPrice = parseFloat(priceData.current_price) || parseFloat(priceData.price) || 0;
+
+          // Debug: log zero prices for major tokens
+          if (tokenPrice === 0 && ['eth', 'pol', 'near', 'inj', 'qnt'].includes(token.symbol?.toLowerCase())) {
+            console.warn(`⚠️  $0 price for major token ${token.symbol} (${token.contractAddress}): source=${priceData.source}`);
+          }
         } catch (e) {
-          // Price defaults to 0 if all sources fail
+          console.error(`❌ Price fetch error for ${token.symbol}:`, e.message);
           tokenPrice = 0;
         }
 
