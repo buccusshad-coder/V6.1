@@ -249,7 +249,13 @@ export default function Wallets() {
 
               <div className="wallet-address">
                 <code>
-                  {wallet.address.substring(0, 10)}...{wallet.address.substring(wallet.address.length - 8)}
+                  {wallet.address ? (
+                    <>
+                      {wallet.address.substring(0, 10)}...{wallet.address.substring(wallet.address.length - 8)}
+                    </>
+                  ) : (
+                    'Solana Only'
+                  )}
                 </code>
               </div>
 
