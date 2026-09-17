@@ -23,11 +23,11 @@ export class WalletsController {
 
   @Post()
   async create(@Request() req, @Body() body: any) {
-    console.log('📝 Wallet create request:', { name: body.name, address: body.address });
+    console.log('📝 Wallet create request:', { name: body.name, address: body.address, solanaAddress: body.solanaAddress });
 
-    if (!body.name || !body.address) {
+    if (!body.name || (!body.address && !body.solanaAddress)) {
       console.error('❌ Missing fields:', body);
-      throw new BadRequestException('Missing required fields: name, address');
+      throw new BadRequestException('Wallet name and at least one address (EVM or Solana) are required');
     }
 
     // Ensure chain has default to bypass validation
