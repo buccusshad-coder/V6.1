@@ -1,10 +1,13 @@
 import { Controller, Get, Post, Put, Delete, Body, Param, UseGuards, Request, BadRequestException } from '@nestjs/common';
 import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
 import { WalletsService } from './wallets.service';
 import { WalletScannerService, TokenBalance } from './wallet-scanner.service';
 import { CreateWalletDto } from './dto/create-wallet.dto';
 import { UpdateWalletDto } from './dto/update-wallet.dto';
 import { JwtGuard } from '../../guards/jwt.guard';
+import { Position } from '../positions/entities/position.entity';
 
 @ApiTags('wallets')
 @Controller('wallets')
@@ -14,6 +17,8 @@ export class WalletsController {
   constructor(
     private walletsService: WalletsService,
     private walletScannerService: WalletScannerService,
+    @InjectRepository(Position)
+    private positionsRepository: Repository<Position>,
   ) {}
 
   @Post()
@@ -118,7 +123,32 @@ export class WalletsController {
 
       await this.walletsService.update(id, req.user.userId, updateData);
 
-      console.log(`✅ Wallet saved successfully`);
+      // Save scanned tokens to positions table
+      console.log(`💾 Saving ${holdings.length} tokens to positions table...`);
+
+      // Delete old positions for this wallet
+      await this.positionsRepository.delete({ walletId: id });
+
+      // Save new positions from scan
+      for (const token of holdings) {
+        const position = this.positionsRepository.create({
+          userId: req.user.userId,
+          walletId: id,
+          symbol: token.symbol,
+          amount: parseFloat(token.amount),
+          currentPrice: 0, // Will be updated by pricing service
+          chain: token.chain || 'ethereum',
+          type: 'token',
+          metadata: {
+            name: token.name,
+            address: token.address,
+            decimals: token.decimals,
+          }
+        });
+        await this.positionsRepository.save(position);
+      }
+
+      console.log(`✅ Wallet and positions saved successfully`);
 
       return {
         success: true,
