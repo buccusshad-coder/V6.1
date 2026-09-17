@@ -1,13 +1,13 @@
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import './App.css';
+import Positions from './pages/Positions';
 
 const Dashboard = React.lazy(() => import('./pages/Dashboard'));
 const Login = React.lazy(() => import('./pages/Login'));
 const Register = React.lazy(() => import('./pages/Register'));
 const Wallets = React.lazy(() => import('./pages/Wallets'));
 const WalletPortfolio = React.lazy(() => import('./pages/WalletPortfolio'));
-const Positions = React.lazy(() => import('./pages/Positions'));
 const Transactions = React.lazy(() => import('./pages/Transactions'));
 const Portfolio = React.lazy(() => import('./pages/Portfolio'));
 const Alerts = React.lazy(() => import('./pages/Alerts'));

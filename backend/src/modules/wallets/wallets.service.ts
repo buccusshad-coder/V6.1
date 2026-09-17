@@ -18,63 +18,45 @@ export class WalletsService {
   ) {}
 
   async create(userId: string, createWalletDto: CreateWalletDto) {
-    const address = createWalletDto.address.trim();
-    const isEvmAddress = address.startsWith('0x') && address.length === 42;
-    const isSolanaAddress = !isEvmAddress && address.length >= 32;
+    const evmAddr = createWalletDto.address?.trim();
+    const solAddr = createWalletDto.solanaAddress?.trim();
 
-    const walletsToCreate = [];
-
-    // Auto-create EVM wallet if address is EVM format
-    if (isEvmAddress) {
-      const evmChains = ['ethereum', 'arbitrum', 'base', 'polygon', 'optimism'];
-      const evmName = createWalletDto.name.endsWith('(EVM)') ? createWalletDto.name : `${createWalletDto.name} (EVM)`;
-      walletsToCreate.push({
-        userId,
-        name: evmName,
-        address,
-        chain: 'ethereum',
-        chains: evmChains,
-        type: 'evm',
-        metadata: createWalletDto.metadata,
-      });
+    // Validate at least one address is provided
+    if (!evmAddr && !solAddr) {
+      throw new BadRequestException('At least one wallet address (EVM or Solana) is required');
     }
 
-    // Auto-create Solana wallet if address is Solana format
-    if (isSolanaAddress) {
-      const solName = createWalletDto.name.endsWith('(SOL)') ? createWalletDto.name : `${createWalletDto.name} (SOL)`;
-      walletsToCreate.push({
-        userId,
-        name: solName,
-        address,
-        chain: 'solana',
-        chains: ['solana'],
-        type: 'solana',
-        metadata: createWalletDto.metadata,
-      });
+    // Determine primary chain based on which address is provided
+    let primaryChain = 'ethereum';
+    let chains = ['ethereum', 'arbitrum', 'base', 'polygon', 'optimism'];
+    let type = 'evm';
+
+    if (solAddr && !evmAddr) {
+      primaryChain = 'solana';
+      chains = ['solana'];
+      type = 'solana';
+    } else if (solAddr && evmAddr) {
+      primaryChain = 'ethereum';
+      chains = ['ethereum', 'arbitrum', 'base', 'polygon', 'optimism', 'solana'];
+      type = 'multi-chain';
     }
 
-    // If somehow neither format matched, create as EVM by default
-    if (walletsToCreate.length === 0) {
-      walletsToCreate.push({
-        userId,
-        name: createWalletDto.name,
-        address,
-        chain: createWalletDto.chain || 'ethereum',
-        chains: [createWalletDto.chain || 'ethereum'],
-        type: 'evm',
-        metadata: createWalletDto.metadata,
-      });
-    }
+    // Create ONE wallet with both addresses
+    const wallet = this.walletsRepository.create({
+      userId,
+      name: createWalletDto.name,
+      address: evmAddr || null,
+      solanaAddress: solAddr || null,
+      chain: primaryChain,
+      chains,
+      type,
+      metadata: createWalletDto.metadata,
+    });
 
-    const savedWallets = [];
-    for (const walletData of walletsToCreate) {
-      const wallet = this.walletsRepository.create(walletData);
-      const saved = await this.walletsRepository.save(wallet);
-      savedWallets.push(saved);
-      this.walletsGateway.broadcastWalletCreated(userId, saved);
-    }
+    const saved = await this.walletsRepository.save(wallet);
+    this.walletsGateway.broadcastWalletCreated(userId, saved);
 
-    return savedWallets.length === 1 ? savedWallets[0] : savedWallets;
+    return saved;
   }
 
   async findAll(userId: string) {

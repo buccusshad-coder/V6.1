@@ -72,7 +72,19 @@ export class WalletsController {
 
       // Scan all chains in parallel and merge results
       const chainResults = await Promise.all(
-        chains.map(chain => this.walletScannerService.scanWalletBalance(wallet.address, chain))
+        chains.map(chain => {
+          // Use appropriate address for each chain
+          const addressToScan = chain.toLowerCase() === 'solana'
+            ? wallet.solanaAddress
+            : wallet.address;
+
+          if (!addressToScan) {
+            console.warn(`⚠️  No address configured for chain ${chain}`);
+            return [];
+          }
+
+          return this.walletScannerService.scanWalletBalance(addressToScan, chain);
+        })
       );
 
       const holdings = chainResults.flat();

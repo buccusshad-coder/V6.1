@@ -62,25 +62,14 @@ export default function Wallets() {
         return;
       }
 
-      // Create Solana wallet if address provided
-      if (solanaAddress) {
-        await api.createWallet({
-          username,
-          name: `${username} (SOL)`,
-          address: solanaAddress,
-        });
-      }
+      // Create ONE wallet with both addresses
+      await api.createWallet({
+        name: username,
+        address: evmAddress,
+        solanaAddress: solanaAddress,
+      });
 
-      // Create EVM wallet if address provided
-      if (evmAddress) {
-        await api.createWallet({
-          username,
-          name: `${username} (EVM)`,
-          address: evmAddress,
-        });
-      }
-
-      setSuccess(`Wallets created successfully for ${username}`);
+      setSuccess(`Wallet created successfully for ${username}`);
       setFormData({ username: '', solanaAddress: '', evmAddress: '' });
       setShowForm(false);
       setEditing(null);
@@ -91,12 +80,11 @@ export default function Wallets() {
     }
   };
 
-  const handleEdit = (wallet: Wallet) => {
-    const isSolana = wallet.type === 'solana';
+  const handleEdit = (wallet: any) => {
     setFormData({
-      username: wallet.username || '',
-      solanaAddress: isSolana ? wallet.address : '',
-      evmAddress: !isSolana ? wallet.address : '',
+      username: wallet.name || '',
+      solanaAddress: wallet.solanaAddress || '',
+      evmAddress: wallet.address || '',
     });
     setEditing(wallet.id);
     setShowForm(true);

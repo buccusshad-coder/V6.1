@@ -9,7 +9,20 @@ interface SolanaTokenBalance {
   amount: string;
   uiAmount: number;
   uiAmountString: string;
+  value?: number;
 }
+
+// Common Solana tokens database
+const SOLANA_TOKENS: Record<string, { symbol: string; name: string; decimals: number }> = {
+  'EPjFWaLb3hyccqpPmyvPTYqfVcWnGumFeWMXgqiNZsDw': { symbol: 'USDC', name: 'USD Coin', decimals: 6 },
+  'Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB': { symbol: 'USDT', name: 'Tether USD', decimals: 6 },
+  'So11111111111111111111111111111111111111112': { symbol: 'SOL', name: 'Solana', decimals: 9 },
+  '4k3Dyjzvzp8eMZWUXbBCjEvwSkkk59S5iCNLY3QrkX6R': { symbol: 'RAY', name: 'Raydium', decimals: 6 },
+  'SRMuApVgqbCmRgtAGsnLKV7XM9LgRVQXhUaKc92NqsgX': { symbol: 'SRM', name: 'Serum', decimals: 6 },
+  'MangoCzJ36AjZyKwVj3VnYU4GTonjfVEnJmvvWaxLac': { symbol: 'MNGO', name: 'Mango', decimals: 6 },
+  'whirLbMiicVdio4KfQ7N0xrKmEaKvTAl3tskVevm6qk': { symbol: 'WHIRL', name: 'Whirlpool', decimals: 6 },
+  'USDCokQsV24b9UZRSSw5BSG2kMd5THaxbJMhénc5gVJ': { symbol: 'USDCpo', name: 'USD Coin (Polygon)', decimals: 6 },
+};
 
 interface SolanaTransaction {
   signature: string;
@@ -59,17 +72,33 @@ export class HeliusService {
       });
 
       const accounts = response.data.result?.value || [];
-      return accounts.map((account: any) => ({
-        mint: account.account.data.parsed.info.mint,
-        symbol: account.account.data.parsed.info.tokenAmount?.uiAmount ? 'UNKNOWN' : 'UNKNOWN',
-        name: 'Unknown Token',
-        decimals: account.account.data.parsed.info.tokenAmount?.decimals || 0,
-        amount: account.account.data.parsed.info.tokenAmount?.amount || '0',
-        uiAmount: account.account.data.parsed.info.tokenAmount?.uiAmount || 0,
-        uiAmountString: account.account.data.parsed.info.tokenAmount?.uiAmountString || '0',
-      }));
+      const tokens: SolanaTokenBalance[] = [];
+
+      for (const account of accounts) {
+        const mint = account.account.data.parsed.info.mint;
+        const tokenAmount = account.account.data.parsed.info.tokenAmount;
+        const uiAmount = parseFloat(tokenAmount?.uiAmountString || '0');
+
+        // Only include tokens with non-zero balance
+        if (uiAmount > 0) {
+          const metadata = SOLANA_TOKENS[mint] || { symbol: 'UNKNOWN', name: 'Unknown Token', decimals: 0 };
+
+          tokens.push({
+            mint,
+            symbol: metadata.symbol,
+            name: metadata.name,
+            decimals: tokenAmount?.decimals || metadata.decimals || 0,
+            amount: tokenAmount?.amount || '0',
+            uiAmount,
+            uiAmountString: tokenAmount?.uiAmountString || '0',
+          });
+        }
+      }
+
+      console.log(`✅ Found ${tokens.length} Solana tokens for ${walletAddress}`);
+      return tokens;
     } catch (error) {
-      console.error('Error fetching Solana token balances:', error);
+      console.error('❌ Error fetching Solana token balances:', error);
       return [];
     }
   }

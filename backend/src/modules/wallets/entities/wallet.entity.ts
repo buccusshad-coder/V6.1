@@ -16,8 +16,11 @@ export class Wallet {
   @Column()
   name: string;
 
-  @Column()
-  address: string;
+  @Column({ nullable: true })
+  address: string; // primary/EVM address
+
+  @Column({ nullable: true })
+  solanaAddress?: string; // Solana address if wallet supports SOL
 
   @Column({ type: 'varchar', length: 50, default: 'ethereum' })
   chain: string; // primary chain - auto-detected from address
@@ -26,7 +29,7 @@ export class Wallet {
   chains?: string[]; // support multiple chains - ethereum, arbitrum, base, solana, polygon, optimism
 
   @Column({ type: 'varchar', length: 20, default: 'evm' })
-  type: string; // evm, solana, etc.
+  type: string; // evm, solana, multi-chain etc.
 
   @Column({ type: 'decimal', precision: 36, scale: 18, default: 0 })
   balance: number;

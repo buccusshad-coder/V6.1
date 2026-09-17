@@ -5,7 +5,12 @@ export class CreateWalletDto {
   name: string;
 
   @IsString()
-  address: string;
+  @IsOptional()
+  address?: string; // EVM address
+
+  @IsString()
+  @IsOptional()
+  solanaAddress?: string; // Solana address
 
   @IsOptional()
   chain?: string; // No validation - auto-detected by service
