@@ -2,13 +2,18 @@ import { NestFactory } from '@nestjs/core';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import { ValidationPipe } from '@nestjs/common';
 import helmet from 'helmet';
-import cors from 'cors';
 import { AppModule } from './app.module';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
 
-  // CORS - Configure before helmet and other middleware
+  // Security middleware - configure helmet to not block CORS
+  app.use(helmet({
+    crossOriginResourcePolicy: false,
+    crossOriginOpenerPolicy: false,
+  }));
+
+  // CORS configuration
   const corsOrigins = process.env.CORS_ORIGIN
     ? process.env.CORS_ORIGIN.split(',').map(o => o.trim())
     : [
@@ -24,21 +29,12 @@ async function bootstrap() {
       ];
   console.log('🔓 CORS Origins:', corsOrigins);
 
-  // Use cors middleware directly for better control
-  app.use(cors({
+  app.enableCors({
     origin: corsOrigins,
     credentials: true,
-    methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS', 'HEAD'],
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization'],
-    exposedHeaders: ['Content-Length'],
-    optionsSuccessStatus: 200,
-  }));
-
-  // Security middleware - configure helmet to not block CORS
-  app.use(helmet({
-    crossOriginResourcePolicy: false,
-    crossOriginOpenerPolicy: false,
-  }));
+  });
 
   // Global pipes
   app.useGlobalPipes(
