@@ -2,13 +2,43 @@ import { NestFactory } from '@nestjs/core';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import { ValidationPipe } from '@nestjs/common';
 import helmet from 'helmet';
+import cors from 'cors';
 import { AppModule } from './app.module';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
 
-  // Security middleware
-  app.use(helmet());
+  // CORS - Configure before helmet and other middleware
+  const corsOrigins = process.env.CORS_ORIGIN
+    ? process.env.CORS_ORIGIN.split(',').map(o => o.trim())
+    : [
+        'http://localhost:3000',
+        'http://localhost:3001',
+        'http://localhost:3002',
+        'http://localhost:3003',
+        'http://127.0.0.1:3000',
+        'http://127.0.0.1:3001',
+        'http://127.0.0.1:3002',
+        'http://127.0.0.1:3003',
+        'https://tracker-v7.vercel.app',
+      ];
+  console.log('🔓 CORS Origins:', corsOrigins);
+
+  // Use cors middleware directly for better control
+  app.use(cors({
+    origin: corsOrigins,
+    credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS', 'HEAD'],
+    allowedHeaders: ['Content-Type', 'Authorization'],
+    exposedHeaders: ['Content-Length'],
+    optionsSuccessStatus: 200,
+  }));
+
+  // Security middleware - configure helmet to not block CORS
+  app.use(helmet({
+    crossOriginResourcePolicy: false,
+    crossOriginOpenerPolicy: false,
+  }));
 
   // Global pipes
   app.useGlobalPipes(
@@ -19,16 +49,6 @@ async function bootstrap() {
       transformOptions: { enableImplicitConversion: true },
     }),
   );
-
-  // CORS
-  const corsOrigins = process.env.CORS_ORIGIN?.split(',').map(o => o.trim()) || ['*'];
-  console.log('🔓 CORS Origins:', corsOrigins);
-  app.enableCors({
-    origin: corsOrigins,
-    credentials: true,
-    methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization'],
-  });
 
   // API version prefix
   app.setGlobalPrefix('api');
