@@ -380,9 +380,20 @@ if (cached) return cached;
 - Some tokens may not have complete history on Etherscan
 
 ### "Transaction history incomplete"
-- Etherscan API may return paginated results
-- Implement pagination for large token histories
-- Historical data is immutable once confirmed
+- Etherscan API returns paginated results (max 10,000 per request)
+- Implement pagination for large token histories using `offset` and `page` parameters
+- Historical data is immutable once confirmed on-chain
+- Solution: Use multi-page requests in `EtherscanService.getTokenTransfers()` to fetch complete history
+  ```typescript
+  // Fetch all pages of transactions
+  const allTransfers = [];
+  for (let page = 1; page <= maxPages; page++) {
+    const transfers = await this.getTokenTransfers(address, tokenAddress, page);
+    allTransfers.push(...transfers);
+  }
+  ```
+- For high-volume wallets: cache paginated results and update incrementally
+- Consider using TheGraph (GraphQL) for more efficient historical data queries
 
 ---
 
